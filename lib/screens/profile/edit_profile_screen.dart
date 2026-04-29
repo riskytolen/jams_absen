@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../core/services/pegawai_service.dart';
+import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_shadows.dart';
 import '../../core/theme/app_spacing.dart';
@@ -45,11 +46,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _statusPernikahan;
 
   // ── Keuangan ──
-  late final TextEditingController _bankCtrl;
+  String? _selectedBank;
   late final TextEditingController _noRekeningCtrl;
   late final TextEditingController _namaRekeningCtrl;
+  List<String> _bankList = [];
+  bool _isBankLoading = true;
 
-  File? _newPhoto;
+  // ── Foto ──
+  File? _newFotoDiri;
+  File? _newFotoKtp;
+  File? _newFotoSim;
+  File? _newFotoKK;
   bool _isSaving = false;
 
   static const _genderOptions = ['Laki-laki', 'Perempuan'];
@@ -64,8 +71,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   static const _statusNikahOptions = [
     'Belum Menikah',
     'Menikah',
-    'Cerai Hidup',
-    'Cerai Mati',
+    'Cerai',
   ];
 
   @override
@@ -87,9 +93,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _jumlahAnakCtrl = TextEditingController(text: p.jumlahAnak.toString());
     _statusPernikahan = p.statusPernikahan;
 
-    _bankCtrl = TextEditingController(text: p.bank ?? '');
+    _selectedBank = p.bank;
     _noRekeningCtrl = TextEditingController(text: p.noRekening ?? '');
     _namaRekeningCtrl = TextEditingController(text: p.namaRekening ?? '');
+
+    _loadBanks();
   }
 
   @override
@@ -102,23 +110,77 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _alamatDomisiliCtrl.dispose();
     _namaPasanganCtrl.dispose();
     _jumlahAnakCtrl.dispose();
-    _bankCtrl.dispose();
     _noRekeningCtrl.dispose();
     _namaRekeningCtrl.dispose();
     super.dispose();
   }
 
   // ── Pick photo ────────────────────────────────────────
-  Future<void> _pickPhoto() async {
+  Future<File?> _pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 800,
-      maxHeight: 800,
-      imageQuality: 85,
+      maxWidth: 1600,
+      maxHeight: 1600,
     );
-    if (picked != null) {
-      setState(() => _newPhoto = File(picked.path));
+    if (picked != null) return File(picked.path);
+    return null;
+  }
+
+  Future<void> _pickFotoDiri() async {
+    final file = await _pickImage();
+    if (file != null) setState(() => _newFotoDiri = file);
+  }
+
+  Future<void> _pickFotoKtp() async {
+    final file = await _pickImage();
+    if (file != null) setState(() => _newFotoKtp = file);
+  }
+
+  Future<void> _pickFotoSim() async {
+    final file = await _pickImage();
+    if (file != null) setState(() => _newFotoSim = file);
+  }
+
+  Future<void> _pickFotoKK() async {
+    final file = await _pickImage();
+    if (file != null) setState(() => _newFotoKK = file);
+  }
+
+  // ── Load banks from database ───────────────────────────
+  Future<void> _loadBanks() async {
+    try {
+      final response = await SupabaseService.client
+          .from('banks')
+          .select('nama')
+          .eq('status', 'Aktif')
+          .order('nama');
+
+      final names = (response as List)
+          .map((e) => e['nama'] as String)
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        _bankList = names;
+        // Jika bank pegawai saat ini tidak ada di list, tambahkan
+        if (_selectedBank != null &&
+            _selectedBank!.isNotEmpty &&
+            !names.contains(_selectedBank)) {
+          _bankList.insert(0, _selectedBank!);
+        }
+        _isBankLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isBankLoading = false);
+      AppNotification.show(
+        context,
+        type: NotificationType.warning,
+        title: 'Gagal Memuat Bank',
+        message: 'Daftar bank tidak tersedia. Anda bisa simpan data lain terlebih dahulu.',
+        duration: const Duration(seconds: 4),
+      );
     }
   }
 
@@ -130,7 +192,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       initialDate: _tanggalLahir ?? DateTime(2000, 1, 1),
       firstDate: DateTime(1950),
       lastDate: now,
-      locale: const Locale('id', 'ID'),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -149,38 +210,104 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  // ── Build updates map — hanya field yang berubah ─────
+  Map<String, dynamic> _buildUpdates() {
+    final p = widget.pegawai;
+    final updates = <String, dynamic>{};
+
+    void check(String key, String? newVal, String? oldVal) {
+      final nv = newVal?.trim() ?? '';
+      final ov = oldVal?.trim() ?? '';
+      if (nv != ov) updates[key] = nv.isEmpty ? null : nv;
+    }
+
+    check('nama', _namaCtrl.text, p.nama);
+    check('no_ktp', _noKtpCtrl.text, p.noKtp);
+    check('tempat_lahir', _tempatLahirCtrl.text, p.tempatLahir);
+    check('no_telp', _noTelpCtrl.text, p.noTelp);
+    check('alamat_ktp', _alamatKtpCtrl.text, p.alamatKtp);
+    check('alamat_domisili', _alamatDomisiliCtrl.text, p.alamatDomisili);
+    check('nama_pasangan', _namaPasanganCtrl.text, p.namaPasangan);
+    check('no_rekening', _noRekeningCtrl.text, p.noRekening);
+    check('nama_rekening', _namaRekeningCtrl.text, p.namaRekening);
+
+    if (_jenisKelamin != p.jenisKelamin) {
+      updates['jenis_kelamin'] = _jenisKelamin;
+    }
+    if (_agama != p.agama) {
+      updates['agama'] = _agama;
+    }
+    if (_statusPernikahan != p.statusPernikahan) {
+      updates['status_pernikahan'] = _statusPernikahan;
+    }
+    if (_selectedBank != p.bank) {
+      updates['bank'] = _selectedBank;
+    }
+
+    final newAnak = int.tryParse(_jumlahAnakCtrl.text.trim()) ?? 0;
+    if (newAnak != p.jumlahAnak) {
+      updates['jumlah_anak'] = newAnak;
+    }
+
+    if (_tanggalLahir != p.tanggalLahir) {
+      updates['tanggal_lahir'] = _tanggalLahir != null
+          ? _tanggalLahir!.toIso8601String().split('T')[0]
+          : null;
+    }
+
+    return updates;
+  }
+
+  bool get _hasPhotoChanges =>
+      _newFotoDiri != null ||
+      _newFotoKtp != null ||
+      _newFotoSim != null ||
+      _newFotoKK != null;
+
   // ── Save ──────────────────────────────────────────────
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_isSaving) return;
 
+    final updates = _buildUpdates();
+
+    // Cek apakah ada perubahan
+    if (updates.isEmpty && !_hasPhotoChanges) {
+      AppNotification.show(
+        context,
+        type: NotificationType.info,
+        title: 'Tidak Ada Perubahan',
+        message: 'Belum ada data yang diubah.',
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
-      if (_newPhoto != null) {
-        await PegawaiService.uploadFotoDiri(
-          employeeId: widget.pegawai.id,
-          imageFile: _newPhoto!,
+      final eid = widget.pegawai.id;
+
+      // 1. Upload foto yang diubah (dikompres ke ≤ 300KB)
+      final photoUploads = <(File, DocType)>[
+        if (_newFotoDiri != null) (_newFotoDiri!, DocType.fotoDiri),
+        if (_newFotoKtp != null) (_newFotoKtp!, DocType.fotoKtp),
+        if (_newFotoSim != null) (_newFotoSim!, DocType.fotoSim),
+        if (_newFotoKK != null) (_newFotoKK!, DocType.kartuKeluarga),
+      ];
+
+      for (final (file, docType) in photoUploads) {
+        await PegawaiService.uploadPhoto(
+          employeeId: eid,
+          imageFile: file,
+          docType: docType,
         );
       }
 
+      // 2. Update data profil
       final updated = await PegawaiService.updateProfile(
-        employeeId: widget.pegawai.id,
-        nama: _namaCtrl.text.trim(),
-        jenisKelamin: _jenisKelamin,
-        agama: _agama,
-        noKtp: _noKtpCtrl.text.trim(),
-        tempatLahir: _tempatLahirCtrl.text.trim(),
-        tanggalLahir: _tanggalLahir,
-        noTelp: _noTelpCtrl.text.trim(),
-        alamatKtp: _alamatKtpCtrl.text.trim(),
-        alamatDomisili: _alamatDomisiliCtrl.text.trim(),
-        statusPernikahan: _statusPernikahan,
-        namaPasangan: _namaPasanganCtrl.text.trim(),
-        jumlahAnak: int.tryParse(_jumlahAnakCtrl.text.trim()) ?? 0,
-        bank: _bankCtrl.text.trim(),
-        noRekening: _noRekeningCtrl.text.trim(),
-        namaRekening: _namaRekeningCtrl.text.trim(),
+        employeeId: eid,
+        updates: updates,
       );
 
       if (!mounted) return;
@@ -194,15 +321,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
 
       Navigator.of(context).pop(updated);
-    } catch (e) {
+    } on PegawaiException catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
       AppNotification.show(
         context,
         type: NotificationType.error,
         title: 'Gagal Menyimpan',
-        message: e.toString(),
-        duration: const Duration(seconds: 4),
+        message: e.message,
+        actionLabel: 'Coba Lagi',
+        onAction: _save,
+        duration: const Duration(seconds: 5),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      AppNotification.show(
+        context,
+        type: NotificationType.error,
+        title: 'Terjadi Kesalahan',
+        message: 'Gagal menyimpan perubahan. Silakan coba lagi.',
+        actionLabel: 'Coba Lagi',
+        onAction: _save,
+        duration: const Duration(seconds: 5),
       );
     }
   }
@@ -240,6 +381,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           _buildKeluargaSection(),
                           const SizedBox(height: AppSpacing.base),
                           _buildKeuanganSection(),
+                          const SizedBox(height: AppSpacing.base),
+                          _buildDokumenSection(),
                           const SizedBox(height: 120),
                         ],
                       ),
@@ -311,7 +454,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: AppSpacing.xl),
               GestureDetector(
-                onTap: _pickPhoto,
+                onTap: _pickFotoDiri,
                 child: Stack(
                   children: [
                     Container(
@@ -324,12 +467,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         radius: 44,
                         backgroundColor:
                             Colors.white.withValues(alpha: 0.20),
-                        backgroundImage: _newPhoto != null
-                            ? FileImage(_newPhoto!)
+                        backgroundImage: _newFotoDiri != null
+                            ? FileImage(_newFotoDiri!)
                             : widget.pegawai.fotoDiri != null
                                 ? NetworkImage(widget.pegawai.fotoDiri!)
                                 : null,
-                        child: (_newPhoto == null &&
+                        child: (_newFotoDiri == null &&
                                 widget.pegawai.fotoDiri == null)
                             ? Text(
                                 widget.pegawai.inisial,
@@ -552,11 +695,61 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       title: 'Keuangan',
       icon: Icons.account_balance_outlined,
       children: [
-        _Field(
-          label: 'Nama Bank',
-          controller: _bankCtrl,
-          prefixIcon: Icons.account_balance_rounded,
-        ),
+        // Bank dropdown dari database
+        _isBankLoading
+            ? Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.base),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Nama Bank',
+                      style: AppTextStyles.labelSm.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.base,
+                        vertical: AppSpacing.md + 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceAlt,
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusMd),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.account_balance_rounded,
+                            size: 20,
+                            color: AppColors.textMuted,
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Text(
+                            'Memuat daftar bank...',
+                            style: AppTextStyles.bodySm.copyWith(
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : _Dropdown(
+                label: 'Nama Bank',
+                value: _selectedBank,
+                items: _bankList,
+                icon: Icons.account_balance_rounded,
+                searchable: true,
+                onChanged: (v) => setState(() => _selectedBank = v),
+              ),
         _Field(
           label: 'No. Rekening',
           controller: _noRekeningCtrl,
@@ -567,6 +760,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           label: 'Nama Pemilik Rekening',
           controller: _namaRekeningCtrl,
           prefixIcon: Icons.person_outline_rounded,
+        ),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // DOKUMEN
+  // ═══════════════════════════════════════════════════════
+  Widget _buildDokumenSection() {
+    return _Section(
+      title: 'Dokumen',
+      icon: Icons.photo_library_outlined,
+      children: [
+        _PhotoPicker(
+          label: 'Foto KTP',
+          currentUrl: widget.pegawai.fotoKtp,
+          newFile: _newFotoKtp,
+          onPick: _pickFotoKtp,
+        ),
+        _PhotoPicker(
+          label: 'Foto SIM',
+          currentUrl: widget.pegawai.fotoSim,
+          newFile: _newFotoSim,
+          onPick: _pickFotoSim,
+        ),
+        _PhotoPicker(
+          label: 'Kartu Keluarga',
+          currentUrl: widget.pegawai.kartuKeluarga,
+          newFile: _newFotoKK,
+          onPick: _pickFotoKK,
         ),
       ],
     );
@@ -749,13 +972,14 @@ class _Field extends StatelessWidget {
   }
 }
 
-/// Dropdown field.
+/// Dropdown field — tap membuka bottom sheet picker.
 class _Dropdown extends StatelessWidget {
   final String label;
   final String? value;
   final List<String> items;
   final IconData icon;
   final ValueChanged<String?> onChanged;
+  final bool searchable;
 
   const _Dropdown({
     required this.label,
@@ -763,6 +987,7 @@ class _Dropdown extends StatelessWidget {
     required this.items,
     required this.icon,
     required this.onChanged,
+    this.searchable = false,
   });
 
   @override
@@ -780,21 +1005,438 @@ class _Dropdown extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          DropdownButtonFormField<String>(
-            initialValue: value,
-            decoration: InputDecoration(
-              prefixIcon: Icon(icon, size: 20, color: AppColors.textMuted),
+          GestureDetector(
+            onTap: () => _showPicker(context),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.base,
+                vertical: AppSpacing.md + 2,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceAlt,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  Icon(icon, size: 20, color: AppColors.textMuted),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      value ?? 'Pilih $label',
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: value != null
+                            ? AppColors.textPrimary
+                            : AppColors.textMuted,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: AppColors.textMuted,
+                    size: 22,
+                  ),
+                ],
+              ),
             ),
-            items: items
-                .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                .toList(),
-            onChanged: onChanged,
-            style: AppTextStyles.bodySm.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w500,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPicker(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _PickerSheet(
+        title: label,
+        items: items,
+        selected: value,
+        searchable: searchable,
+        onSelected: (v) {
+          onChanged(v);
+          Navigator.of(context).pop();
+        },
+      ),
+    );
+  }
+}
+
+/// Bottom sheet picker — modern, searchable, responsive.
+class _PickerSheet extends StatefulWidget {
+  final String title;
+  final List<String> items;
+  final String? selected;
+  final bool searchable;
+  final ValueChanged<String> onSelected;
+
+  const _PickerSheet({
+    required this.title,
+    required this.items,
+    required this.selected,
+    required this.searchable,
+    required this.onSelected,
+  });
+
+  @override
+  State<_PickerSheet> createState() => _PickerSheetState();
+}
+
+class _PickerSheetState extends State<_PickerSheet> {
+  final _searchCtrl = TextEditingController();
+  late List<String> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = widget.items;
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearch(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filtered = widget.items;
+      } else {
+        _filtered = widget.items
+            .where((e) => e.toLowerCase().contains(query.toLowerCase()))
+            .toList();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final maxHeight = MediaQuery.of(context).size.height * 0.6;
+
+    return Container(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppSpacing.radiusXxl),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Handle bar ──
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceDim,
+              borderRadius: BorderRadius.circular(2),
             ),
-            dropdownColor: AppColors.surface,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          const SizedBox(height: AppSpacing.base),
+
+          // ── Title ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            child: Row(
+              children: [
+                Text('Pilih ${widget.title}', style: AppTextStyles.h3),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceAlt,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 18,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Search (jika searchable) ──
+          if (widget.searchable) ...[
+            const SizedBox(height: AppSpacing.md),
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: _onSearch,
+                style: AppTextStyles.bodySm.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Cari ${widget.title.toLowerCase()}...',
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    size: 20,
+                    color: AppColors.textMuted,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: AppSpacing.md,
+                  ),
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: AppSpacing.sm),
+          const Divider(height: 1),
+
+          // ── Items ──
+          Flexible(
+            child: _filtered.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(AppSpacing.xxl),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.search_off_rounded,
+                          size: 36,
+                          color: AppColors.textMuted.withValues(alpha: 0.4),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          'Tidak ditemukan',
+                          style: AppTextStyles.body
+                              .copyWith(color: AppColors.textMuted),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.only(
+                      bottom: bottomPadding + AppSpacing.base,
+                    ),
+                    itemCount: _filtered.length,
+                    itemBuilder: (_, i) {
+                      final item = _filtered[i];
+                      final isSelected = item == widget.selected;
+
+                      return InkWell(
+                        onTap: () => widget.onSelected(item),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg,
+                            vertical: AppSpacing.md + 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.primary50
+                                : Colors.transparent,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  item,
+                                  style: AppTextStyles.bodySm.copyWith(
+                                    color: isSelected
+                                        ? AppColors.primary600
+                                        : AppColors.textPrimary,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              if (isSelected)
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: AppColors.primary600,
+                                  size: 20,
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Photo picker — preview + tap to change.
+class _PhotoPicker extends StatelessWidget {
+  final String label;
+  final String? currentUrl;
+  final File? newFile;
+  final VoidCallback onPick;
+
+  const _PhotoPicker({
+    required this.label,
+    required this.currentUrl,
+    required this.newFile,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = newFile != null || currentUrl != null;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.base),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: AppTextStyles.labelSm.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          GestureDetector(
+            onTap: onPick,
+            child: Container(
+              width: double.infinity,
+              height: 160,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceAlt,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: Border.all(color: AppColors.border),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: hasImage
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // Image preview
+                        if (newFile != null)
+                          Image.file(newFile!, fit: BoxFit.cover)
+                        else if (currentUrl != null)
+                          Image.network(
+                            currentUrl!,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (_, child, progress) {
+                              if (progress == null) return child;
+                              return const Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation(
+                                      AppColors.primary400,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                            errorBuilder: (_, error, stackTrace) =>
+                                _emptyState(),
+                          ),
+
+                        // Change overlay
+                        Positioned(
+                          right: AppSpacing.sm,
+                          bottom: AppSpacing.sm,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.xs + 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.radiusFull,
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.camera_alt_rounded,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Ganti',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // New badge
+                        if (newFile != null)
+                          Positioned(
+                            left: AppSpacing.sm,
+                            top: AppSpacing.sm,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.success,
+                                borderRadius: BorderRadius.circular(
+                                  AppSpacing.radiusFull,
+                                ),
+                              ),
+                              child: const Text(
+                                'Baru',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    )
+                  : _emptyState(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _emptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.add_photo_alternate_outlined,
+            size: 32,
+            color: AppColors.textMuted.withValues(alpha: 0.5),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Ketuk untuk upload $label',
+            style: AppTextStyles.caption,
           ),
         ],
       ),

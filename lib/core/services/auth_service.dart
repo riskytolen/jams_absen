@@ -50,6 +50,11 @@ abstract final class AuthService {
   static Pegawai? get currentPegawai => _currentPegawai;
   static bool get isLoggedIn => _currentPegawai != null;
 
+  /// Update data pegawai di session (setelah edit profil).
+  static void updateCurrentPegawai(Pegawai pegawai) {
+    _currentPegawai = pegawai;
+  }
+
   /// Login dengan ID pegawai (dari QR Code) + device binding.
   static Future<Pegawai> loginWithId(String employeeId) async {
     final trimmedId = employeeId.trim().toUpperCase();

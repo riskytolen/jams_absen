@@ -28,8 +28,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _hasCheckedIn = false;
   String? _clockInTime;
   int _navIndex = 0;
+  late Pegawai _pegawai;
 
-  Pegawai get _pegawai => widget.pegawai;
+  @override
+  void initState() {
+    super.initState();
+    _pegawai = widget.pegawai;
+  }
 
   // ── Menu items ─────────────────────────────────────────
   List<MenuItemModel> get _menuItems => [
@@ -135,12 +140,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ];
 
   // ── Callbacks ──────────────────────────────────────────
-  void _openProfile() {
-    Navigator.of(context).push(
+  void _onTabChanged(int index) {
+    if (index == 4) {
+      _openProfile();
+      return;
+    }
+    setState(() => _navIndex = index);
+  }
+
+  Future<void> _openProfile() async {
+    final updated = await Navigator.of(context).push<Pegawai>(
       MaterialPageRoute(
         builder: (_) => ProfileScreen(pegawai: _pegawai),
       ),
     );
+    if (updated != null && mounted) {
+      setState(() => _pegawai = updated);
+      AuthService.updateCurrentPegawai(updated);
+    }
   }
 
   void _onMenuTap(String label) {
@@ -292,7 +309,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         bottomNavigationBar: DashboardBottomNav(
           currentIndex: _navIndex,
           hasCheckedIn: _hasCheckedIn,
-          onTabChanged: (i) => setState(() => _navIndex = i),
+          onTabChanged: _onTabChanged,
           onScanFace: _onScanFace,
         ),
       ),
