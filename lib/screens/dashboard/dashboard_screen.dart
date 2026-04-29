@@ -68,21 +68,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTap: () => _onMenuTap('Pendapatan'),
         ),
         MenuItemModel(
-          title: 'Lembur',
-          subtitle: 'Pengajuan lembur',
-          icon: Icons.more_time_rounded,
-          gradient: AppColors.roseGradient,
-          badge: '1',
-          onTap: () => _onMenuTap('Lembur'),
-        ),
-        MenuItemModel(
-          title: 'Jadwal Kerja',
-          subtitle: 'Shift & jadwal',
-          icon: Icons.calendar_month_rounded,
-          gradient: AppColors.indigoGradient,
-          onTap: () => _onMenuTap('Jadwal Kerja'),
-        ),
-        MenuItemModel(
           title: 'Pengumuman',
           subtitle: 'Info perusahaan',
           icon: Icons.campaign_rounded,
