@@ -422,7 +422,7 @@ class _LoginScreenState extends State<LoginScreen>
               shaderCallback: (bounds) =>
                   AppColors.primaryGradient.createShader(bounds),
               child: const Icon(
-                Icons.fingerprint_rounded,
+                Icons.face_retouching_natural_rounded,
                 size: 44,
                 color: Colors.white,
               ),
