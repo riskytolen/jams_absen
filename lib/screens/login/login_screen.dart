@@ -431,7 +431,7 @@ class _LoginScreenState extends State<LoginScreen>
         ),
         const SizedBox(height: AppSpacing.lg),
         Text(
-          'JamsAbsen',
+          'Jams Attendance',
           style: AppTextStyles.h1.copyWith(
             color: Colors.white,
             fontSize: 28,
@@ -645,7 +645,7 @@ class _LoginScreenState extends State<LoginScreen>
     return Column(
       children: [
         Text(
-          'JamsAbsen v1.0.0',
+          'Jams Attendance v1.0.0',
           style: AppTextStyles.onDarkMuted.copyWith(
             color: Colors.white.withValues(alpha: 0.35),
             fontSize: 12,
@@ -653,7 +653,7 @@ class _LoginScreenState extends State<LoginScreen>
         ),
         const SizedBox(height: 2),
         Text(
-          '\u00A9 2026 JamsAbsen. All rights reserved.',
+          '\u00A9 2026 Jams Attendance. All rights reserved.',
           style: AppTextStyles.onDarkMuted.copyWith(
             color: Colors.white.withValues(alpha: 0.25),
             fontSize: 11,

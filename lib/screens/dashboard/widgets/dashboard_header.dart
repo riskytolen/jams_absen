@@ -6,7 +6,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/greeting_helper.dart';
 import '../../../widgets/cards/live_clock_widget.dart';
 
-/// Header dashboard — berisi profil, jam, dan info absen hari ini.
+/// Header dashboard — profil, jam, dan info absen hari ini.
 class DashboardHeader extends StatelessWidget {
   final String userName;
   final String department;
@@ -126,7 +126,7 @@ class _TopBar extends StatelessWidget {
         ),
         const SizedBox(width: AppSpacing.md + 2),
 
-        // Greeting
+        // Greeting + name
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,7 +136,12 @@ class _TopBar extends StatelessWidget {
                 style: AppTextStyles.onDarkBody,
               ),
               const SizedBox(height: 2),
-              Text(userName, style: AppTextStyles.onDarkTitle),
+              Text(
+                userName,
+                style: AppTextStyles.onDarkTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),
@@ -262,7 +267,7 @@ class _DepartmentChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.business_rounded,
+            Icons.badge_rounded,
             color: Colors.white.withValues(alpha: 0.85),
             size: AppSpacing.iconXs,
           ),

@@ -66,7 +66,7 @@ abstract final class LocationService {
       throw const LocationException(
         type: LocationErrorType.permissionDeniedForever,
         message: 'Izin lokasi ditolak secara permanen. '
-            'Buka Pengaturan > Aplikasi > JamsAbsen > Izin, '
+            'Buka Pengaturan > Aplikasi > Jams Attendance > Izin, '
             'lalu aktifkan izin Lokasi.',
       );
     }
@@ -86,7 +86,7 @@ abstract final class LocationService {
         throw const LocationException(
           type: LocationErrorType.permissionDeniedForever,
           message: 'Izin lokasi ditolak secara permanen. '
-              'Buka Pengaturan > Aplikasi > JamsAbsen > Izin, '
+              'Buka Pengaturan > Aplikasi > Jams Attendance > Izin, '
               'lalu aktifkan izin Lokasi.',
         );
       }

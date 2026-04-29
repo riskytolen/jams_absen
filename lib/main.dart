@@ -35,7 +35,7 @@ class JamsAbsenApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'JamsAbsen',
+      title: 'Jams Attendance',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       home: const LoginScreen(),

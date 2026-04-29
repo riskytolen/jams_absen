@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Design system color palette untuk JamsAbsen.
+/// Design system color palette untuk Jams Attendance.
 ///
 /// Primary: Sky Blue — segar, modern, profesional.
 /// Menggunakan skala gelap→terang untuk menjaga kontras
