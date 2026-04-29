@@ -11,11 +11,13 @@ class DashboardHeader extends StatelessWidget {
   final String userName;
   final String department;
   final String position;
+  final String? avatarUrl;
   final int notificationCount;
   final bool hasCheckedIn;
   final String? clockInTime;
   final VoidCallback? onNotificationTap;
   final VoidCallback? onAvatarTap;
+  final VoidCallback? onLogoutTap;
 
   const DashboardHeader({
     super.key,
@@ -23,10 +25,12 @@ class DashboardHeader extends StatelessWidget {
     required this.department,
     required this.position,
     required this.hasCheckedIn,
+    this.avatarUrl,
     this.notificationCount = 0,
     this.clockInTime,
     this.onNotificationTap,
     this.onAvatarTap,
+    this.onLogoutTap,
   });
 
   @override
@@ -49,9 +53,11 @@ class DashboardHeader extends StatelessWidget {
             children: [
               _TopBar(
                 userName: userName,
+                avatarUrl: avatarUrl,
                 notificationCount: notificationCount,
                 onNotificationTap: onNotificationTap,
                 onAvatarTap: onAvatarTap,
+                onLogoutTap: onLogoutTap,
               ),
               const SizedBox(height: AppSpacing.xl),
               const LiveClockWidget(),
@@ -75,15 +81,19 @@ class DashboardHeader extends StatelessWidget {
 // ═════════════════════════════════════════════════════════
 class _TopBar extends StatelessWidget {
   final String userName;
+  final String? avatarUrl;
   final int notificationCount;
   final VoidCallback? onNotificationTap;
   final VoidCallback? onAvatarTap;
+  final VoidCallback? onLogoutTap;
 
   const _TopBar({
     required this.userName,
     required this.notificationCount,
+    this.avatarUrl,
     this.onNotificationTap,
     this.onAvatarTap,
+    this.onLogoutTap,
   });
 
   @override
@@ -102,11 +112,15 @@ class _TopBar extends StatelessWidget {
             child: CircleAvatar(
               radius: 21,
               backgroundColor: Colors.white.withValues(alpha: 0.20),
-              child: const Icon(
-                Icons.person_rounded,
-                color: Colors.white,
-                size: AppSpacing.iconMd,
-              ),
+              backgroundImage:
+                  avatarUrl != null ? NetworkImage(avatarUrl!) : null,
+              child: avatarUrl == null
+                  ? const Icon(
+                      Icons.person_rounded,
+                      color: Colors.white,
+                      size: AppSpacing.iconMd,
+                    )
+                  : null,
             ),
           ),
         ),
@@ -131,6 +145,8 @@ class _TopBar extends StatelessWidget {
           count: notificationCount,
           onTap: onNotificationTap,
         ),
+        const SizedBox(width: AppSpacing.sm),
+        _LogoutButton(onTap: onLogoutTap),
       ],
     );
   }
@@ -185,6 +201,40 @@ class _NotificationBell extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════
+// LOGOUT BUTTON
+// ═════════════════════════════════════════════════════════
+class _LogoutButton extends StatelessWidget {
+  final VoidCallback? onTap;
+
+  const _LogoutButton({this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap?.call();
+      },
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.20),
+          ),
+        ),
+        child: const Icon(
+          Icons.logout_rounded,
+          color: Colors.white,
+          size: AppSpacing.iconMd,
+        ),
       ),
     );
   }

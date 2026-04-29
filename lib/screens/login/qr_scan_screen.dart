@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 
 /// Halaman scan QR Code pada ID Card pegawai untuk login.
 ///
-/// Saat ini menggunakan placeholder UI (belum integrasi kamera).
-/// Ketika package camera/qr_scanner ditambahkan, ganti area kamera
-/// dengan widget kamera sesungguhnya.
+/// Menggunakan [MobileScanner] untuk akses kamera real.
+/// QR Code berisi ID pegawai (misal: "ID60375").
 class QrScanScreen extends StatefulWidget {
   final ValueChanged<String> onScanned;
 
@@ -20,6 +20,9 @@ class QrScanScreen extends StatefulWidget {
 
 class _QrScanScreenState extends State<QrScanScreen>
     with TickerProviderStateMixin {
+  // ── Camera controller ──
+  late final MobileScannerController _cameraCtrl;
+
   // ── Scan line animation ──
   late final AnimationController _scanLineCtrl;
   late final Animation<double> _scanLineAnim;
@@ -28,13 +31,20 @@ class _QrScanScreenState extends State<QrScanScreen>
   late final AnimationController _pulseCtrl;
   late final Animation<double> _pulseAnim;
 
-  // ── Flash state ──
-  bool _isFlashOn = false;
+  // ── State ──
+  bool _hasScanned = false;
   bool _isProcessing = false;
+  bool _isFlashOn = false;
 
   @override
   void initState() {
     super.initState();
+
+    _cameraCtrl = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+      torchEnabled: false,
+    );
 
     _scanLineCtrl = AnimationController(
       vsync: this,
@@ -57,31 +67,37 @@ class _QrScanScreenState extends State<QrScanScreen>
 
   @override
   void dispose() {
+    _cameraCtrl.dispose();
     _scanLineCtrl.dispose();
     _pulseCtrl.dispose();
     super.dispose();
   }
 
+  // ── Toggle flash ──────────────────────────────────────
   void _toggleFlash() {
     HapticFeedback.lightImpact();
+    _cameraCtrl.toggleTorch();
     setState(() => _isFlashOn = !_isFlashOn);
-    // TODO: Integrasi toggle flash kamera
   }
 
-  /// Simulasi scan berhasil — nanti ganti dengan hasil kamera.
-  void _simulateScan() async {
-    if (_isProcessing) return;
+  // ── Handle QR detected ────────────────────────────────
+  void _onDetect(BarcodeCapture capture) {
+    if (_hasScanned || _isProcessing) return;
 
-    setState(() => _isProcessing = true);
-    HapticFeedback.mediumImpact();
+    final barcode = capture.barcodes.firstOrNull;
+    if (barcode == null || barcode.rawValue == null) return;
 
-    // Simulasi proses verifikasi
-    await Future.delayed(const Duration(milliseconds: 1200));
+    final code = barcode.rawValue!.trim();
+    if (code.isEmpty) return;
 
-    if (!mounted) return;
+    setState(() {
+      _hasScanned = true;
+      _isProcessing = true;
+    });
 
     HapticFeedback.heavyImpact();
-    widget.onScanned('EMP-001');
+    _scanLineCtrl.stop();
+    widget.onScanned(code);
   }
 
   @override
@@ -94,8 +110,14 @@ class _QrScanScreenState extends State<QrScanScreen>
         backgroundColor: Colors.black,
         body: Stack(
           children: [
-            // ── Camera placeholder ──
-            Container(color: const Color(0xFF0A0A0A)),
+            // ── Live camera ──
+            MobileScanner(
+              controller: _cameraCtrl,
+              onDetect: _onDetect,
+              errorBuilder: (context, error) {
+                return _CameraError(error: error);
+              },
+            ),
 
             // ── Dimmed overlay di luar viewfinder ──
             _DimOverlay(),
@@ -106,12 +128,13 @@ class _QrScanScreenState extends State<QrScanScreen>
               scanLineController: _scanLineCtrl,
               pulseAnimation: _pulseAnim,
               pulseController: _pulseCtrl,
+              isProcessing: _isProcessing,
             ),
 
             // ── Top bar ──
             _buildTopBar(),
 
-            // ── Bottom section ──
+            // ── Bottom info ──
             Positioned(
               left: 0,
               right: 0,
@@ -136,14 +159,11 @@ class _QrScanScreenState extends State<QrScanScreen>
         ),
         child: Row(
           children: [
-            // Back button
             _GlassButton(
               icon: Icons.arrow_back_rounded,
               onTap: () => Navigator.of(context).pop(),
             ),
             const Spacer(),
-
-            // Title
             Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.md,
@@ -175,10 +195,7 @@ class _QrScanScreenState extends State<QrScanScreen>
                 ],
               ),
             ),
-
             const Spacer(),
-
-            // Flash button
             _GlassButton(
               icon: _isFlashOn
                   ? Icons.flash_on_rounded
@@ -201,7 +218,7 @@ class _QrScanScreenState extends State<QrScanScreen>
         AppSpacing.xl,
         AppSpacing.xxl,
         AppSpacing.xl,
-        MediaQuery.of(context).padding.bottom + AppSpacing.xl,
+        MediaQuery.of(context).padding.bottom + AppSpacing.xxl,
       ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -216,90 +233,68 @@ class _QrScanScreenState extends State<QrScanScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Instruction chip ──
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.base,
-              vertical: AppSpacing.sm + 2,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.10),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.qr_code_rounded,
-                  color: AppColors.primary300,
-                  size: AppSpacing.iconSm,
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  'Arahkan ke QR Code pada ID Card',
-                  style: AppTextStyles.onDarkBody.copyWith(fontSize: 13),
-                ),
-              ],
-            ),
+          // ── Status chip ──
+          AnimatedSwitcher(
+            duration: AppSpacing.durationNormal,
+            child: _isProcessing
+                ? _buildChip(
+                    icon: Icons.check_circle_rounded,
+                    text: 'QR Code terdeteksi! Memverifikasi...',
+                    color: AppColors.success,
+                    key: const ValueKey('processing'),
+                  )
+                : _buildChip(
+                    icon: Icons.qr_code_rounded,
+                    text: 'Arahkan ke QR Code pada ID Card',
+                    color: AppColors.primary300,
+                    key: const ValueKey('scanning'),
+                  ),
           ),
           const SizedBox(height: AppSpacing.base),
 
           // ── Description ──
           Text(
-            'Posisikan QR Code di dalam bingkai\nScan akan berjalan otomatis',
+            _isProcessing
+                ? 'Mohon tunggu sebentar...'
+                : 'Posisikan QR Code di dalam bingkai\nScan akan berjalan otomatis',
             textAlign: TextAlign.center,
             style: AppTextStyles.onDarkCaption.copyWith(
               color: Colors.white.withValues(alpha: 0.50),
               height: 1.5,
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
+        ],
+      ),
+    );
+  }
 
-          // ── Simulate scan button (demo) ──
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                gradient:
-                    _isProcessing ? null : AppColors.primaryGradient,
-                color: _isProcessing
-                    ? AppColors.primary600.withValues(alpha: 0.4)
-                    : null,
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _isProcessing ? null : _simulateScan,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                  splashColor: Colors.white.withValues(alpha: 0.12),
-                  child: Center(
-                    child: _isProcessing
-                        ? const _ScanProcessingIndicator()
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.touch_app_rounded,
-                                color: Colors.white,
-                                size: AppSpacing.iconMd,
-                              ),
-                              const SizedBox(width: AppSpacing.sm),
-                              Text(
-                                'Simulasi Scan (Demo)',
-                                style: AppTextStyles.button
-                                    .copyWith(fontSize: 14),
-                              ),
-                            ],
-                          ),
-                  ),
-                ),
-              ),
-            ),
+  Widget _buildChip({
+    required IconData icon,
+    required String text,
+    required Color color,
+    required Key key,
+  }) {
+    return Container(
+      key: key,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.base,
+        vertical: AppSpacing.sm + 2,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.10),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: AppSpacing.iconSm),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            text,
+            style: AppTextStyles.onDarkBody.copyWith(fontSize: 13),
           ),
         ],
       ),
@@ -308,7 +303,53 @@ class _QrScanScreenState extends State<QrScanScreen>
 }
 
 // ═════════════════════════════════════════════════════════
-// GLASS BUTTON (top bar)
+// CAMERA ERROR
+// ═════════════════════════════════════════════════════════
+class _CameraError extends StatelessWidget {
+  final MobileScannerException error;
+
+  const _CameraError({required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xxl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.no_photography_rounded,
+                size: 56,
+                color: Colors.white.withValues(alpha: 0.30),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                'Kamera tidak tersedia',
+                style: AppTextStyles.onDarkTitle,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Pastikan izin kamera sudah diberikan\ndan tidak digunakan aplikasi lain.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.onDarkCaption.copyWith(
+                  color: Colors.white.withValues(alpha: 0.50),
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════
+// GLASS BUTTON
 // ═════════════════════════════════════════════════════════
 class _GlassButton extends StatelessWidget {
   final IconData icon;
@@ -350,36 +391,7 @@ class _GlassButton extends StatelessWidget {
 }
 
 // ═════════════════════════════════════════════════════════
-// SCAN PROCESSING INDICATOR
-// ═════════════════════════════════════════════════════════
-class _ScanProcessingIndicator extends StatelessWidget {
-  const _ScanProcessingIndicator();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation(Colors.white),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Text(
-          'Memverifikasi...',
-          style: AppTextStyles.button.copyWith(fontSize: 14),
-        ),
-      ],
-    );
-  }
-}
-
-// ═════════════════════════════════════════════════════════
-// DIM OVERLAY — gelap di luar area scan
+// DIM OVERLAY
 // ═════════════════════════════════════════════════════════
 class _DimOverlay extends StatelessWidget {
   @override
@@ -394,20 +406,18 @@ class _DimOverlay extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          // Full screen fill
           Container(
             decoration: const BoxDecoration(
               color: Colors.white,
               backgroundBlendMode: BlendMode.dstOut,
             ),
           ),
-          // Cutout hole
           Center(
             child: Container(
               width: scanSize,
               height: scanSize,
               decoration: BoxDecoration(
-                color: Colors.red, // warna apapun, akan di-cut
+                color: Colors.red,
                 borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
               ),
             ),
@@ -426,12 +436,14 @@ class _ScannerViewfinder extends StatelessWidget {
   final AnimationController scanLineController;
   final Animation<double> pulseAnimation;
   final AnimationController pulseController;
+  final bool isProcessing;
 
   const _ScannerViewfinder({
     required this.scanLineAnimation,
     required this.scanLineController,
     required this.pulseAnimation,
     required this.pulseController,
+    required this.isProcessing,
   });
 
   @override
@@ -453,7 +465,9 @@ class _ScannerViewfinder extends StatelessWidget {
                 child: CustomPaint(
                   size: Size(scanSize, scanSize),
                   painter: _CornerBracketPainter(
-                    color: AppColors.primary400,
+                    color: isProcessing
+                        ? AppColors.success
+                        : AppColors.primary400,
                     strokeWidth: 3.5,
                     cornerLength: 30,
                     cornerRadius: AppSpacing.radiusLg,
@@ -462,51 +476,70 @@ class _ScannerViewfinder extends StatelessWidget {
               ),
             ),
 
-            // ── Scan line ──
-            ListenableBuilder(
-              listenable: scanLineController,
-              builder: (_, _) {
-                final top = scanLineAnimation.value * (scanSize - 4);
-                return Positioned(
-                  top: top,
-                  left: 18,
-                  right: 18,
-                  child: Container(
-                    height: 2.5,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(2),
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.primary400.withValues(alpha: 0.0),
-                          AppColors.primary400.withValues(alpha: 0.7),
-                          AppColors.primary400,
-                          AppColors.primary400.withValues(alpha: 0.7),
-                          AppColors.primary400.withValues(alpha: 0.0),
-                        ],
-                        stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                              AppColors.primary400.withValues(alpha: 0.45),
-                          blurRadius: 14,
-                          spreadRadius: 2,
+            // ── Scan line (hanya saat scanning) ──
+            if (!isProcessing)
+              ListenableBuilder(
+                listenable: scanLineController,
+                builder: (_, _) {
+                  final top = scanLineAnimation.value * (scanSize - 4);
+                  return Positioned(
+                    top: top,
+                    left: 18,
+                    right: 18,
+                    child: Container(
+                      height: 2.5,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(2),
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.primary400.withValues(alpha: 0.0),
+                            AppColors.primary400.withValues(alpha: 0.7),
+                            AppColors.primary400,
+                            AppColors.primary400.withValues(alpha: 0.7),
+                            AppColors.primary400.withValues(alpha: 0.0),
+                          ],
+                          stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
                         ),
-                      ],
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary400
+                                .withValues(alpha: 0.45),
+                            blurRadius: 14,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
-
-            // ── Center hint icon ──
-            Center(
-              child: Icon(
-                Icons.qr_code_2_rounded,
-                size: 48,
-                color: Colors.white.withValues(alpha: 0.08),
+                  );
+                },
               ),
-            ),
+
+            // ── Success check (saat terdeteksi) ──
+            if (isProcessing)
+              Center(
+                child: Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: AppColors.success,
+                    size: 32,
+                  ),
+                ),
+              )
+            else
+              // ── Center hint icon ──
+              Center(
+                child: Icon(
+                  Icons.qr_code_2_rounded,
+                  size: 48,
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+              ),
           ],
         ),
       ),

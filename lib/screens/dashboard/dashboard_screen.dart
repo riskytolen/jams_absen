@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/menu_item_model.dart';
+import '../../models/pegawai_model.dart';
 import '../../widgets/cards/attendance_progress_card.dart';
 import '../../widgets/cards/recent_activity_card.dart';
+import '../login/login_screen.dart';
+import '../profile/profile_screen.dart';
 import 'widgets/dashboard_header.dart';
 import 'widgets/stats_section.dart';
 import 'widgets/menu_grid_section.dart';
@@ -12,7 +16,9 @@ import 'widgets/bottom_nav_bar.dart';
 
 /// Halaman utama dashboard aplikasi absen.
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final Pegawai pegawai;
+
+  const DashboardScreen({super.key, required this.pegawai});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -22,6 +28,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _hasCheckedIn = false;
   String? _clockInTime;
   int _navIndex = 0;
+
+  Pegawai get _pegawai => widget.pegawai;
 
   // ── Menu items ─────────────────────────────────────────
   List<MenuItemModel> get _menuItems => [
@@ -45,7 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           subtitle: 'Data pribadi anda',
           icon: Icons.person_rounded,
           gradient: AppColors.purpleGradient,
-          onTap: () => _onMenuTap('Profil'),
+          onTap: _openProfile,
         ),
         MenuItemModel(
           title: 'Pendapatan',
@@ -91,16 +99,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (_hasCheckedIn)
           ActivityItem(
             title: 'Absen Masuk',
-            subtitle: 'Verifikasi wajah berhasil \u2014 Tepat waktu',
+            subtitle: 'QR Code terverifikasi \u2014 Tepat waktu',
             time: _clockInTime ?? '--:--',
-            icon: Icons.face_retouching_natural_rounded,
+            icon: Icons.qr_code_scanner_rounded,
             color: AppColors.success,
           ),
         const ActivityItem(
           title: 'Absen Masuk',
-          subtitle: 'Verifikasi wajah berhasil \u2014 Tepat waktu',
+          subtitle: 'QR Code terverifikasi \u2014 Tepat waktu',
           time: '08:02',
-          icon: Icons.face_retouching_natural_rounded,
+          icon: Icons.qr_code_scanner_rounded,
           color: AppColors.success,
         ),
         const ActivityItem(
@@ -112,9 +120,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const ActivityItem(
           title: 'Absen Masuk',
-          subtitle: 'Verifikasi wajah berhasil \u2014 Terlambat 5 mnt',
+          subtitle: 'QR Code terverifikasi \u2014 Terlambat 5 mnt',
           time: '2 hari lalu',
-          icon: Icons.face_retouching_natural_rounded,
+          icon: Icons.qr_code_scanner_rounded,
           color: AppColors.warning,
         ),
         const ActivityItem(
@@ -127,11 +135,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ];
 
   // ── Callbacks ──────────────────────────────────────────
+  void _openProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProfileScreen(pegawai: _pegawai),
+      ),
+    );
+  }
+
   void _onMenuTap(String label) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Navigasi ke $label'),
         duration: const Duration(milliseconds: 800),
+      ),
+    );
+  }
+
+  void _onLogout() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Keluar'),
+        content: const Text('Apakah Anda yakin ingin keluar dari aplikasi?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              AuthService.logout();
+              Navigator.of(context).pushReplacement(
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) =>
+                      const LoginScreen(),
+                  transitionsBuilder:
+                      (context, anim, secondaryAnimation, child) {
+                    return FadeTransition(
+                      opacity: CurvedAnimation(
+                        parent: anim,
+                        curve: Curves.easeInOut,
+                      ),
+                      child: child,
+                    );
+                  },
+                  transitionDuration: AppSpacing.durationPage,
+                ),
+              );
+            },
+            child: Text(
+              'Keluar',
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -155,7 +214,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Icon(Icons.verified_rounded, color: Colors.white, size: 20),
             SizedBox(width: 10),
             Expanded(
-              child: Text('Verifikasi wajah berhasil! Absen tercatat.'),
+              child: Text('Absen berhasil tercatat!'),
             ),
           ],
         ),
@@ -182,14 +241,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // ── Header (profil + jam + info absen) ──
             SliverToBoxAdapter(
               child: DashboardHeader(
-                userName: 'Risky Feryansyah',
-                department: 'IT Department',
-                position: 'Software Engineer',
+                userName: _pegawai.nama,
+                department: _pegawai.id,
+                position: _pegawai.jabatanNama ?? '-',
+                avatarUrl: _pegawai.fotoDiri,
                 notificationCount: 3,
                 hasCheckedIn: _hasCheckedIn,
                 clockInTime: _clockInTime,
                 onNotificationTap: () => _onMenuTap('Notifikasi'),
-                onAvatarTap: () => _onMenuTap('Profil'),
+                onAvatarTap: _openProfile,
+                onLogoutTap: _onLogout,
               ),
             ),
 

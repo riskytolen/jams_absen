@@ -1,10 +1,16 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/services/location_service.dart';
+import '../../core/services/sound_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_shadows.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../models/pegawai_model.dart';
+import '../../widgets/common/app_notification.dart';
 import '../dashboard/dashboard_screen.dart';
 import 'qr_scan_screen.dart';
 
@@ -18,6 +24,10 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with TickerProviderStateMixin {
+  // ── State ──
+  bool _isLoading = false;
+  String? _loadingMessage;
+
   // ── Entrance animations ──
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
@@ -76,15 +86,60 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
+  // ── Set loading state ─────────────────────────────────
+  void _setLoading(bool loading, [String? message]) {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = loading;
+      _loadingMessage = message;
+    });
+  }
+
   // ── Open QR Scanner ───────────────────────────────────
-  void _openQrScanner() {
+  Future<void> _openQrScanner() async {
+    if (_isLoading) return; // Prevent double-tap
+
     HapticFeedback.mediumImpact();
+
+    // 1. Cek koneksi internet
+    _setLoading(true, 'Memeriksa koneksi...');
+    final hasConnection = await _checkConnection();
+    if (!hasConnection) {
+      _setLoading(false);
+      if (!mounted) return;
+      AppNotification.show(
+        context,
+        type: NotificationType.warning,
+        title: 'Tidak Ada Koneksi Internet',
+        message: 'Periksa WiFi atau data seluler Anda terlebih dahulu, '
+            'lalu coba lagi.',
+        actionLabel: 'Coba Lagi',
+        onAction: _openQrScanner,
+        duration: const Duration(seconds: 5),
+      );
+      return;
+    }
+
+    // 2. Cek lokasi (GPS aktif + permission)
+    _setLoading(true, 'Memeriksa lokasi...');
+    try {
+      await LocationService.ensureReady();
+    } on LocationException catch (e) {
+      _setLoading(false);
+      if (!mounted) return;
+      _handleLocationError(e);
+      return;
+    }
+
+    _setLoading(false);
+    if (!mounted) return;
+
     Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) => QrScanScreen(
           onScanned: (code) {
             Navigator.of(context).pop();
-            _navigateToDashboard();
+            _authenticateWithId(code);
           },
         ),
         transitionsBuilder: (context, anim, secondaryAnimation, child) {
@@ -104,12 +159,178 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  // ── Cek koneksi internet ──────────────────────────────
+  Future<bool> _checkConnection() async {
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 3));
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ── Handle location error ─────────────────────────────
+  void _handleLocationError(LocationException error) {
+    switch (error.type) {
+      case LocationErrorType.serviceDisabled:
+        AppNotification.show(
+          context,
+          type: NotificationType.warning,
+          title: 'GPS Tidak Aktif',
+          message: error.message,
+          actionLabel: 'Buka Pengaturan',
+          onAction: () => LocationService.openLocationSettings(),
+          duration: const Duration(seconds: 6),
+        );
+
+      case LocationErrorType.permissionDenied:
+        AppNotification.show(
+          context,
+          type: NotificationType.warning,
+          title: 'Izin Lokasi Diperlukan',
+          message: error.message,
+          actionLabel: 'Coba Lagi',
+          onAction: _openQrScanner,
+          duration: const Duration(seconds: 5),
+        );
+
+      case LocationErrorType.permissionDeniedForever:
+        AppNotification.show(
+          context,
+          type: NotificationType.error,
+          title: 'Izin Lokasi Diblokir',
+          message: error.message,
+          actionLabel: 'Buka Pengaturan',
+          onAction: () => LocationService.openAppSettings(),
+          duration: const Duration(seconds: 7),
+        );
+
+      case LocationErrorType.timeout:
+      case LocationErrorType.unknown:
+        AppNotification.show(
+          context,
+          type: NotificationType.error,
+          title: 'Lokasi Tidak Tersedia',
+          message: error.message,
+          actionLabel: 'Coba Lagi',
+          onAction: _openQrScanner,
+          duration: const Duration(seconds: 5),
+        );
+    }
+  }
+
+  // ── Authenticate with employee ID ─────────────────────
+  Future<void> _authenticateWithId(String employeeId) async {
+    _setLoading(true, 'Memverifikasi ID...');
+
+    try {
+      final pegawai = await AuthService.loginWithId(employeeId);
+      if (!mounted) return;
+      SoundService.playLoginSuccess();
+      _setLoading(false);
+      _navigateToDashboard(pegawai);
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      SoundService.playLoginError();
+      _setLoading(false);
+      _handleAuthError(e);
+    }
+  }
+
+  // ── Error handler lengkap per tipe ────────────────────
+  void _handleAuthError(AuthException error) {
+    switch (error.type) {
+      case AuthErrorType.invalidQr:
+        AppNotification.show(
+          context,
+          type: NotificationType.warning,
+          title: 'QR Code Tidak Valid',
+          message: error.message,
+          actionLabel: 'Scan Ulang',
+          onAction: _openQrScanner,
+          duration: const Duration(seconds: 5),
+        );
+
+      case AuthErrorType.notFound:
+        AppNotification.show(
+          context,
+          type: NotificationType.error,
+          title: 'Pegawai Tidak Ditemukan',
+          message: error.message,
+          actionLabel: 'Coba Lagi',
+          onAction: _openQrScanner,
+          duration: const Duration(seconds: 5),
+        );
+
+      case AuthErrorType.inactive:
+        AppNotification.show(
+          context,
+          type: NotificationType.error,
+          title: 'Akun Tidak Aktif',
+          message: error.message,
+          duration: const Duration(seconds: 6),
+        );
+
+      case AuthErrorType.deviceBoundToOther:
+        AppNotification.show(
+          context,
+          type: NotificationType.error,
+          title: 'Perangkat Tidak Sesuai',
+          message: error.message,
+          duration: const Duration(seconds: 7),
+        );
+
+      case AuthErrorType.deviceUsedByOther:
+        AppNotification.show(
+          context,
+          type: NotificationType.error,
+          title: 'Perangkat Sudah Terdaftar',
+          message: error.message,
+          duration: const Duration(seconds: 7),
+        );
+
+      case AuthErrorType.noConnection:
+        AppNotification.show(
+          context,
+          type: NotificationType.warning,
+          title: 'Tidak Ada Koneksi',
+          message: error.message,
+          actionLabel: 'Coba Lagi',
+          onAction: _openQrScanner,
+          duration: const Duration(seconds: 5),
+        );
+
+      case AuthErrorType.serverError:
+        AppNotification.show(
+          context,
+          type: NotificationType.error,
+          title: 'Server Bermasalah',
+          message: error.message,
+          actionLabel: 'Coba Lagi',
+          onAction: _openQrScanner,
+          duration: const Duration(seconds: 5),
+        );
+
+      case AuthErrorType.unknown:
+        AppNotification.show(
+          context,
+          type: NotificationType.error,
+          title: 'Terjadi Kesalahan',
+          message: error.message,
+          actionLabel: 'Coba Lagi',
+          onAction: _openQrScanner,
+          duration: const Duration(seconds: 5),
+        );
+    }
+  }
+
   // ── Navigate to Dashboard ─────────────────────────────
-  void _navigateToDashboard() {
+  void _navigateToDashboard(Pegawai pegawai) {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            const DashboardScreen(),
+            DashboardScreen(pegawai: pegawai),
         transitionsBuilder: (context, anim, secondaryAnimation, child) {
           return FadeTransition(
             opacity: CurvedAnimation(parent: anim, curve: Curves.easeInOut),
@@ -142,6 +363,9 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
               ),
             ),
+
+            // ── Loading overlay ──
+            if (_isLoading) _LoadingOverlay(message: _loadingMessage),
           ],
         ),
       ),
@@ -240,7 +464,7 @@ class _LoginScreenState extends State<LoginScreen>
       ),
       child: Column(
         children: [
-          // ── Illustration: ID Card icon ──
+          // ── Illustration ──
           Container(
             width: 72,
             height: 72,
@@ -277,24 +501,30 @@ class _LoginScreenState extends State<LoginScreen>
           ListenableBuilder(
             listenable: _pulseCtrl,
             builder: (_, child) => Transform.scale(
-              scale: _pulseAnim.value,
+              scale: _isLoading ? 1.0 : _pulseAnim.value,
               child: child,
             ),
             child: SizedBox(
               width: double.infinity,
               height: 54,
-              child: Container(
+              child: AnimatedContainer(
+                duration: AppSpacing.durationNormal,
                 decoration: BoxDecoration(
                   borderRadius:
                       BorderRadius.circular(AppSpacing.radiusMd + 2),
-                  gradient: AppColors.primaryGradient,
-                  boxShadow:
-                      AppShadows.coloredLg(AppColors.primary600, opacity: 0.35),
+                  gradient: _isLoading ? null : AppColors.primaryGradient,
+                  color: _isLoading ? AppColors.primary300 : null,
+                  boxShadow: _isLoading
+                      ? []
+                      : AppShadows.coloredLg(
+                          AppColors.primary600,
+                          opacity: 0.35,
+                        ),
                 ),
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    onTap: _openQrScanner,
+                    onTap: _isLoading ? null : _openQrScanner,
                     borderRadius:
                         BorderRadius.circular(AppSpacing.radiusMd + 2),
                     splashColor: Colors.white.withValues(alpha: 0.15),
@@ -325,7 +555,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   // ═══════════════════════════════════════════════════════
-  // HOW IT WORKS — 3 langkah kecil
+  // HOW IT WORKS
   // ═══════════════════════════════════════════════════════
   Widget _buildHowItWorks() {
     return Column(
@@ -341,19 +571,16 @@ class _LoginScreenState extends State<LoginScreen>
         Row(
           children: [
             _buildStep(
-              number: '1',
               icon: Icons.badge_rounded,
               label: 'Siapkan\nID Card',
             ),
             _buildStepConnector(),
             _buildStep(
-              number: '2',
               icon: Icons.qr_code_rounded,
               label: 'Scan QR\nCode',
             ),
             _buildStepConnector(),
             _buildStep(
-              number: '3',
               icon: Icons.verified_rounded,
               label: 'Verifikasi\nBerhasil',
             ),
@@ -364,7 +591,6 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildStep({
-    required String number,
     required IconData icon,
     required String label,
   }) {
@@ -434,6 +660,61 @@ class _LoginScreenState extends State<LoginScreen>
           ),
         ),
       ],
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════
+// LOADING OVERLAY
+// ═════════════════════════════════════════════════════════
+class _LoadingOverlay extends StatelessWidget {
+  final String? message;
+
+  const _LoadingOverlay({this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black.withValues(alpha: 0.40),
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: AppSpacing.huge),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xl,
+            vertical: AppSpacing.lg,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+            boxShadow: AppShadows.modal,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation(AppColors.primary600),
+                ),
+              ),
+              if (message != null) ...[
+                const SizedBox(width: AppSpacing.base),
+                Flexible(
+                  child: Text(
+                    message!,
+                    style: AppTextStyles.label.copyWith(
+                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -47,6 +47,12 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>JamsAbsen membutuhkan akses kamera untuk scan QR Code pada ID Card pegawai.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>JamsAbsen membutuhkan akses lokasi untuk verifikasi titik absensi Anda.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>JamsAbsen membutuhkan akses lokasi untuk verifikasi titik absensi Anda.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
