@@ -33,6 +33,9 @@ abstract final class PegawaiService {
     required Map<String, dynamic> updates,
   }) async {
     try {
+      // Pastikan auth aktif untuk melewati RLS
+      await SupabaseService.ensureAuthenticated();
+
       if (updates.isEmpty) {
         // Tidak ada perubahan, fetch data terbaru saja
         final response = await _client
@@ -75,6 +78,9 @@ abstract final class PegawaiService {
     required DocType docType,
   }) async {
     try {
+      // Pastikan auth aktif untuk melewati RLS
+      await SupabaseService.ensureAuthenticated();
+
       final compressed = await _compressTo300KB(imageFile);
 
       await _deleteOldFiles(employeeId, docType.fileName);

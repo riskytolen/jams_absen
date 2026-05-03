@@ -150,6 +150,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // ── Load banks from database ───────────────────────────
   Future<void> _loadBanks() async {
     try {
+      await SupabaseService.ensureAuthenticated();
       final response = await SupabaseService.client
           .from('banks')
           .select('nama')

@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 
-/// Bottom navigation bar modern dengan floating center button.
+/// Bottom nav — clean flat, center scan button prominent.
 class DashboardBottomNav extends StatelessWidget {
   final int currentIndex;
   final bool hasCheckedIn;
@@ -21,99 +21,55 @@ class DashboardBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.transparent,
-      child: Stack(
-        alignment: Alignment.bottomCenter,
-        clipBehavior: Clip.none,
-        children: [
-          // ── Nav bar body ──
-          _NavBody(
-            currentIndex: currentIndex,
-            onTabChanged: onTabChanged,
-          ),
-
-          // ── Floating center button ──
-          Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 28,
-            child: _FaceScanButton(
-              hasCheckedIn: hasCheckedIn,
-              onTap: onScanFace,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ═════════════════════════════════════════════════════════
-// NAV BODY
-// ═════════════════════════════════════════════════════════
-class _NavBody extends StatelessWidget {
-  final int currentIndex;
-  final ValueChanged<int> onTabChanged;
-
-  const _NavBody({
-    required this.currentIndex,
-    required this.onTabChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusXxl),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary900.withValues(alpha: 0.08),
-            blurRadius: 24,
+            color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+            blurRadius: 12,
             offset: const Offset(0, -2),
-            spreadRadius: 2,
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: SafeArea(
         top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _NavTab(
-              icon: Icons.dashboard_rounded,
-              label: 'Beranda',
-              isSelected: currentIndex == 0,
-              onTap: () => onTabChanged(0),
-            ),
-            _NavTab(
-              icon: Icons.history_rounded,
-              label: 'Riwayat',
-              isSelected: currentIndex == 1,
-              onTap: () => onTabChanged(1),
-            ),
-
-            // Spacer untuk center button
-            const SizedBox(width: 64),
-
-            _NavTab(
-              icon: Icons.event_note_rounded,
-              label: 'Cuti',
-              isSelected: currentIndex == 3,
-              onTap: () => onTabChanged(3),
-            ),
-            _NavTab(
-              icon: Icons.person_rounded,
-              label: 'Profil',
-              isSelected: currentIndex == 4,
-              onTap: () => onTabChanged(4),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              _Tab(
+                icon: Icons.home_rounded,
+                label: 'Beranda',
+                isSelected: currentIndex == 0,
+                onTap: () => onTabChanged(0),
+              ),
+              _Tab(
+                icon: Icons.history_rounded,
+                label: 'Riwayat',
+                isSelected: currentIndex == 1,
+                onTap: () => onTabChanged(1),
+              ),
+              // Center button
+              Expanded(
+                child: _CenterButton(
+                  hasCheckedIn: hasCheckedIn,
+                  onTap: onScanFace,
+                ),
+              ),
+              _Tab(
+                icon: Icons.event_note_rounded,
+                label: 'Cuti',
+                isSelected: currentIndex == 3,
+                onTap: () => onTabChanged(3),
+              ),
+              _Tab(
+                icon: Icons.person_rounded,
+                label: 'Profil',
+                isSelected: currentIndex == 4,
+                onTap: () => onTabChanged(4),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -121,15 +77,15 @@ class _NavBody extends StatelessWidget {
 }
 
 // ═════════════════════════════════════════════════════════
-// NAV TAB
+// TAB
 // ═════════════════════════════════════════════════════════
-class _NavTab extends StatelessWidget {
+class _Tab extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
 
-  const _NavTab({
+  const _Tab({
     required this.icon,
     required this.label,
     required this.isSelected,
@@ -138,56 +94,37 @@ class _NavTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 56,
+    final color = isSelected ? AppColors.accent : AppColors.textMuted;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Indicator dot
-            AnimatedContainer(
-              duration: AppSpacing.durationNormal,
-              curve: AppSpacing.curveDefault,
-              width: isSelected ? 20 : 0,
-              height: 3,
-              margin: const EdgeInsets.only(bottom: 6),
-              decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary600 : Colors.transparent,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-
-            // Icon
-            AnimatedContainer(
-              duration: AppSpacing.durationFast,
-              curve: AppSpacing.curveDefault,
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.primary100
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                icon,
-                color: isSelected ? AppColors.primary600 : AppColors.textMuted,
-                size: AppSpacing.iconMd,
-              ),
-            ),
+            Icon(icon, color: color, size: 22),
             const SizedBox(height: 3),
-
-            // Label
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? AppColors.primary600 : AppColors.textMuted,
+                color: color,
                 fontSize: 10,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 2),
+            // Indicator
+            AnimatedContainer(
+              duration: AppSpacing.durationFast,
+              width: isSelected ? 16 : 0,
+              height: 2.5,
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.accent : Colors.transparent,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
           ],
@@ -198,64 +135,48 @@ class _NavTab extends StatelessWidget {
 }
 
 // ═════════════════════════════════════════════════════════
-// FACE SCAN CENTER BUTTON
+// CENTER BUTTON
 // ═════════════════════════════════════════════════════════
-class _FaceScanButton extends StatefulWidget {
+class _CenterButton extends StatefulWidget {
   final bool hasCheckedIn;
   final VoidCallback onTap;
 
-  const _FaceScanButton({required this.hasCheckedIn, required this.onTap});
+  const _CenterButton({required this.hasCheckedIn, required this.onTap});
 
   @override
-  State<_FaceScanButton> createState() => _FaceScanButtonState();
+  State<_CenterButton> createState() => _CenterButtonState();
 }
 
-class _FaceScanButtonState extends State<_FaceScanButton>
+class _CenterButtonState extends State<_CenterButton>
     with TickerProviderStateMixin {
-  // Scale on tap
   late final AnimationController _tapCtrl;
   late final Animation<double> _tapScale;
-
-  // Pulse ring (hanya saat belum absen)
   late final AnimationController _pulseCtrl;
-  late final Animation<double> _pulseScale;
-  late final Animation<double> _pulseOpacity;
 
   @override
   void initState() {
     super.initState();
-
     _tapCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 100),
+      duration: const Duration(milliseconds: 80),
     );
-    _tapScale = Tween(begin: 1.0, end: 0.88).animate(
+    _tapScale = Tween(begin: 1.0, end: 0.90).animate(
       CurvedAnimation(parent: _tapCtrl, curve: Curves.easeInOut),
     );
-
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     );
-    _pulseScale = Tween(begin: 1.0, end: 1.35).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeOut),
-    );
-    _pulseOpacity = Tween(begin: 0.5, end: 0.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeOut),
-    );
-
-    if (!widget.hasCheckedIn) {
-      _pulseCtrl.repeat();
-    }
+    if (!widget.hasCheckedIn) _pulseCtrl.repeat();
   }
 
   @override
-  void didUpdateWidget(covariant _FaceScanButton oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.hasCheckedIn && !oldWidget.hasCheckedIn) {
+  void didUpdateWidget(covariant _CenterButton old) {
+    super.didUpdateWidget(old);
+    if (widget.hasCheckedIn && !old.hasCheckedIn) {
       _pulseCtrl.stop();
       _pulseCtrl.reset();
-    } else if (!widget.hasCheckedIn && oldWidget.hasCheckedIn) {
+    } else if (!widget.hasCheckedIn && old.hasCheckedIn) {
       _pulseCtrl.repeat();
     }
   }
@@ -269,96 +190,95 @@ class _FaceScanButtonState extends State<_FaceScanButton>
 
   @override
   Widget build(BuildContext context) {
-    final isChecked = widget.hasCheckedIn;
+    final checked = widget.hasCheckedIn;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Button area
-        SizedBox(
-          width: 76,
-          height: 76,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Pulse ring
-              if (!isChecked)
-                ListenableBuilder(
-                  listenable: _pulseCtrl,
-                  builder: (_, _) => Transform.scale(
-                    scale: _pulseScale.value,
-                    child: Container(
-                      width: 66,
-                      height: 66,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: AppColors.primary600
-                              .withValues(alpha: _pulseOpacity.value),
-                          width: 2.5,
+    return GestureDetector(
+      onTapDown: checked ? null : (_) => _tapCtrl.forward(),
+      onTapUp: checked
+          ? null
+          : (_) {
+              _tapCtrl.reverse();
+              HapticFeedback.mediumImpact();
+              widget.onTap();
+            },
+      onTapCancel: checked ? null : () => _tapCtrl.reverse(),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 56,
+            height: 56,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Pulse
+                if (!checked)
+                  AnimatedBuilder(
+                    animation: _pulseCtrl,
+                    builder: (_, _) {
+                      final t = _pulseCtrl.value;
+                      return Transform.scale(
+                        scale: 1.0 + (t * 0.3),
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.accent
+                                  .withValues(alpha: 0.4 * (1 - t)),
+                              width: 2,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
-                ),
-
-              // Main button
-              GestureDetector(
-                onTapDown: isChecked ? null : (_) => _tapCtrl.forward(),
-                onTapUp: isChecked
-                    ? null
-                    : (_) {
-                        _tapCtrl.reverse();
-                        HapticFeedback.mediumImpact();
-                        widget.onTap();
-                      },
-                onTapCancel: isChecked ? null : () => _tapCtrl.reverse(),
-                child: ListenableBuilder(
+                // Button
+                ListenableBuilder(
                   listenable: _tapScale,
                   builder: (_, child) =>
                       Transform.scale(scale: _tapScale.value, child: child),
-                  child: AnimatedContainer(
-                    duration: AppSpacing.durationNormal,
-                    curve: AppSpacing.curveDefault,
-                    width: 66,
-                    height: 66,
+                  child: Container(
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
-                      gradient: isChecked ? null : AppColors.primaryGradient,
-                      color: isChecked ? AppColors.success : null,
+                      gradient: checked ? null : AppColors.accentGradient,
+                      color: checked ? AppColors.success : null,
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.surface, width: 4),
+                      boxShadow: checked
+                          ? []
+                          : [
+                              BoxShadow(
+                                color: AppColors.accent.withValues(alpha: 0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                     ),
-                    child: AnimatedSwitcher(
-                      duration: AppSpacing.durationFast,
-                      child: Icon(
-                        isChecked
-                            ? Icons.verified_rounded
-                            : Icons.face_retouching_natural_rounded,
-                        key: ValueKey(isChecked),
-                        color: Colors.white,
-                        size: 28,
-                      ),
+                    child: Icon(
+                      checked
+                          ? Icons.verified_rounded
+                          : Icons.face_retouching_natural_rounded,
+                      color: Colors.white,
+                      size: 22,
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-
-        const SizedBox(height: 2),
-
-        // Label
-        AnimatedDefaultTextStyle(
-          duration: AppSpacing.durationFast,
-          style: TextStyle(
-            color: isChecked ? AppColors.success : AppColors.primary600,
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
+          const SizedBox(height: 2),
+          Text(
+            checked ? 'Tercatat' : 'Absen',
+            style: TextStyle(
+              color: checked ? AppColors.success : AppColors.accent,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          child: Text(isChecked ? 'Tercatat' : 'Absen'),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

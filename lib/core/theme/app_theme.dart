@@ -4,10 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 import 'app_spacing.dart';
 
-/// Konfigurasi tema global aplikasi.
-///
-/// Menyediakan [light] theme yang lengkap dengan semua component theme
-/// agar konsisten di seluruh aplikasi.
+/// Tema global — Deep Navy, clean flat, bold.
 abstract final class AppTheme {
   static ThemeData get light {
     final baseText = GoogleFonts.plusJakartaSansTextTheme();
@@ -17,12 +14,11 @@ abstract final class AppTheme {
       brightness: Brightness.light,
       scaffoldBackgroundColor: AppColors.background,
 
-      // ── Color Scheme ──────────────────────────────────
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
-        primary: AppColors.primary600,
+        primary: AppColors.accent,
         onPrimary: AppColors.textOnPrimary,
-        secondary: AppColors.secondary,
+        secondary: AppColors.success,
         surface: AppColors.surface,
         onSurface: AppColors.textPrimary,
         error: AppColors.error,
@@ -30,7 +26,6 @@ abstract final class AppTheme {
         outline: AppColors.border,
       ),
 
-      // ── Typography ────────────────────────────────────
       textTheme: baseText.copyWith(
         headlineLarge: baseText.headlineLarge?.copyWith(
           fontWeight: FontWeight.w800,
@@ -85,7 +80,6 @@ abstract final class AppTheme {
         ),
       ),
 
-      // ── AppBar ────────────────────────────────────────
       appBarTheme: AppBarTheme(
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -104,40 +98,37 @@ abstract final class AppTheme {
         ),
       ),
 
-      // ── Card ──────────────────────────────────────────
       cardTheme: CardThemeData(
         elevation: 0,
         color: AppColors.surface,
         surfaceTintColor: Colors.transparent,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+          borderRadius: BorderRadius.circular(20),
         ),
       ),
 
-      // ── Elevated Button ───────────────────────────────
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           elevation: 0,
-          backgroundColor: AppColors.primary600,
+          backgroundColor: AppColors.accent,
           foregroundColor: AppColors.textOnPrimary,
           disabledBackgroundColor: AppColors.surfaceDim,
           disabledForegroundColor: AppColors.textDisabled,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           textStyle: GoogleFonts.plusJakartaSans(
             fontSize: 15,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),
 
-      // ── Outlined Button ───────────────────────────────
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary600,
+          foregroundColor: AppColors.accent,
           disabledForegroundColor: AppColors.textDisabled,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           textStyle: GoogleFonts.plusJakartaSans(
@@ -146,26 +137,24 @@ abstract final class AppTheme {
           ),
           side: const BorderSide(color: AppColors.primary300),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),
 
-      // ── Text Button ───────────────────────────────────
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.primary600,
+          foregroundColor: AppColors.accent,
           textStyle: GoogleFonts.plusJakartaSans(
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),
 
-      // ── Input Decoration ──────────────────────────────
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surfaceAlt,
@@ -189,38 +178,37 @@ abstract final class AppTheme {
           fontWeight: FontWeight.w500,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          borderSide: const BorderSide(color: AppColors.primary600, width: 1.5),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error, width: 1.5),
         ),
         disabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.borderLight),
         ),
       ),
 
-      // ── Bottom Sheet ──────────────────────────────────
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
-            top: Radius.circular(AppSpacing.radiusXxl),
+            top: Radius.circular(24),
           ),
         ),
         showDragHandle: true,
@@ -228,13 +216,12 @@ abstract final class AppTheme {
         dragHandleSize: Size(40, 4),
       ),
 
-      // ── Dialog ────────────────────────────────────────
       dialogTheme: DialogThemeData(
         backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 8,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+          borderRadius: BorderRadius.circular(20),
         ),
         titleTextStyle: GoogleFonts.plusJakartaSans(
           fontSize: 18,
@@ -249,7 +236,6 @@ abstract final class AppTheme {
         ),
       ),
 
-      // ── SnackBar ──────────────────────────────────────
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.primary900,
         contentTextStyle: GoogleFonts.plusJakartaSans(
@@ -259,7 +245,7 @@ abstract final class AppTheme {
         ),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(12),
         ),
         elevation: 4,
         insetPadding: const EdgeInsets.symmetric(
@@ -268,7 +254,6 @@ abstract final class AppTheme {
         ),
       ),
 
-      // ── Chip ──────────────────────────────────────────
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.primary50,
         selectedColor: AppColors.primary100,
@@ -280,42 +265,38 @@ abstract final class AppTheme {
         ),
         side: const BorderSide(color: AppColors.primary200),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          borderRadius: BorderRadius.circular(8),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       ),
 
-      // ── Divider ───────────────────────────────────────
       dividerTheme: const DividerThemeData(
         color: AppColors.divider,
         thickness: 1,
         space: 1,
       ),
 
-      // ── Floating Action Button ────────────────────────
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: AppColors.primary600,
+        backgroundColor: AppColors.accent,
         foregroundColor: AppColors.textOnPrimary,
         elevation: 4,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+          borderRadius: BorderRadius.circular(16),
         ),
       ),
 
-      // ── Icon ──────────────────────────────────────────
       iconTheme: const IconThemeData(
         color: AppColors.textSecondary,
         size: AppSpacing.iconLg,
       ),
 
-      // ── ListTile ──────────────────────────────────────
       listTileTheme: ListTileThemeData(
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.base,
           vertical: AppSpacing.xs,
         ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(12),
         ),
         titleTextStyle: GoogleFonts.plusJakartaSans(
           fontSize: 15,
@@ -330,11 +311,10 @@ abstract final class AppTheme {
         iconColor: AppColors.textSecondary,
       ),
 
-      // ── Tab Bar ───────────────────────────────────────
       tabBarTheme: TabBarThemeData(
-        labelColor: AppColors.primary600,
+        labelColor: AppColors.accent,
         unselectedLabelColor: AppColors.textMuted,
-        indicatorColor: AppColors.primary600,
+        indicatorColor: AppColors.accent,
         labelStyle: GoogleFonts.plusJakartaSans(
           fontSize: 14,
           fontWeight: FontWeight.w600,
@@ -347,11 +327,10 @@ abstract final class AppTheme {
         dividerColor: Colors.transparent,
       ),
 
-      // ── Switch ────────────────────────────────────────
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.primary600;
+            return AppColors.accent;
           }
           return AppColors.surfaceDim;
         }),
@@ -363,18 +342,16 @@ abstract final class AppTheme {
         }),
       ),
 
-      // ── Progress Indicator ────────────────────────────
       progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: AppColors.primary600,
+        color: AppColors.accent,
         linearTrackColor: AppColors.primary100,
         circularTrackColor: AppColors.primary100,
       ),
 
-      // ── Tooltip ───────────────────────────────────────
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
           color: AppColors.primary900,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          borderRadius: BorderRadius.circular(8),
         ),
         textStyle: GoogleFonts.plusJakartaSans(
           color: AppColors.textOnPrimary,
@@ -383,7 +360,6 @@ abstract final class AppTheme {
         ),
       ),
 
-      // ── Splash & Highlight ────────────────────────────
       splashColor: AppColors.primary100,
       highlightColor: AppColors.primary50,
       splashFactory: InkSparkle.splashFactory,

@@ -733,9 +733,9 @@ class _BackgroundGradient extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF075985),
-            Color(0xFF0369A1),
-            Color(0xFF0C4A6E),
+            Color(0xFF0A1628),
+            Color(0xFF162544),
+            Color(0xFF1B3A5C),
           ],
           stops: [0.0, 0.5, 1.0],
         ),

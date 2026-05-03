@@ -1,87 +1,94 @@
 import 'package:flutter/material.dart';
 
-/// Design system color palette untuk Jams Attendance.
+/// Design system — Deep Blue / Navy palette.
 ///
-/// Primary: Sky Blue — segar, modern, profesional.
-/// Menggunakan skala gelap→terang untuk menjaga kontras
-/// di berbagai konteks (header gelap, surface putih, dll).
+/// Corporate, trustworthy, profesional.
+/// Warna bold untuk aksen, clean untuk surface.
 abstract final class AppColors {
-  // ── Brand Primary (Sky Blue Scale) ─────────────────────
-  static const primary900  = Color(0xFF0C4A6E);   // Paling gelap — header bg
-  static const primary800  = Color(0xFF075985);   // Header gradient mid
-  static const primary700  = Color(0xFF0369A1);   // Header gradient end
-  static const primary600  = Color(0xFF0284C7);   // Tombol, link, aksen kuat
-  static const primary      = Color(0xFF0EA5E9);   // Brand utama — Sky-500
-  static const primary400  = Color(0xFF38BDF8);   // Highlight, progress bar
-  static const primary300  = Color(0xFF7DD3FC);   // Soft accent
-  static const primary200  = Color(0xFFBAE6FD);   // Light tint
-  static const primary100  = Color(0xFFE0F2FE);   // Subtle background
-  static const primary50   = Color(0xFFF0F9FF);   // Card tint
+  // ── Brand Primary (Deep Navy Scale) ────────────────────
+  static const primary900  = Color(0xFF0A1628);   // Paling gelap
+  static const primary800  = Color(0xFF111D35);   // Header bg
+  static const primary700  = Color(0xFF162544);   // Header gradient
+  static const primary600  = Color(0xFF1B3A5C);   // Tombol, aksen kuat
+  static const primary      = Color(0xFF1E4D8C);   // Brand utama
+  static const primary400  = Color(0xFF2E6AB4);   // Highlight
+  static const primary300  = Color(0xFF5A8FCC);   // Soft accent
+  static const primary200  = Color(0xFF9BBDE0);   // Light tint
+  static const primary100  = Color(0xFFD0E2F3);   // Subtle bg
+  static const primary50   = Color(0xFFEBF2FA);   // Card tint
 
-  // ── Secondary ──────────────────────────────────────────
-  static const secondary      = Color(0xFF00BFA5);
-  static const secondaryLight = Color(0xFF64FFDA);
+  // ── Accent (Bright Blue — untuk CTA & highlight) ───────
+  static const accent      = Color(0xFF2563EB);
+  static const accentLight = Color(0xFF60A5FA);
+  static const accentBg    = Color(0xFFEFF6FF);
 
   // ── Semantic ───────────────────────────────────────────
-  static const success     = Color(0xFF10B981);
+  static const success     = Color(0xFF059669);
   static const successLight = Color(0xFF34D399);
   static const successBg   = Color(0xFFECFDF5);
-  static const warning     = Color(0xFFF59E0B);
+  static const warning     = Color(0xFFD97706);
   static const warningLight = Color(0xFFFBBF24);
   static const warningBg   = Color(0xFFFFFBEB);
-  static const error       = Color(0xFFEF4444);
+  static const error       = Color(0xFFDC2626);
   static const errorLight  = Color(0xFFF87171);
   static const errorBg     = Color(0xFFFEF2F2);
-  static const info        = Color(0xFF3B82F6);
+  static const info        = Color(0xFF2563EB);
   static const infoLight   = Color(0xFF60A5FA);
   static const infoBg      = Color(0xFFEFF6FF);
 
   // ── Surface ────────────────────────────────────────────
-  static const background  = Color(0xFFF0F9FF);   // Sky-50 tinted bg
+  static const background  = Color(0xFFF5F7FA);   // Cool gray bg
   static const surface     = Color(0xFFFFFFFF);
-  static const surfaceAlt  = Color(0xFFF1F5F9);
-  static const surfaceDim  = Color(0xFFE2E8F0);   // Disabled / skeleton bg
-  static const border      = Color(0xFFE2E8F0);
-  static const borderLight = Color(0xFFF1F5F9);
-  static const divider     = Color(0xFFE2E8F0);
-  static const shimmer     = Color(0xFFE2E8F0);   // Skeleton loading shimmer
+  static const surfaceAlt  = Color(0xFFF1F3F7);
+  static const surfaceDim  = Color(0xFFE2E6ED);
+  static const border      = Color(0xFFE2E6ED);
+  static const borderLight = Color(0xFFF1F3F7);
+  static const divider     = Color(0xFFE8ECF1);
+  static const shimmer     = Color(0xFFE2E6ED);
 
   // ── Text ───────────────────────────────────────────────
-  static const textDark      = Color(0xFF0C4A6E);   // primary900 — judul utama
+  static const textDark      = Color(0xFF0F172A);   // Judul utama
   static const textPrimary   = Color(0xFF1E293B);   // Body text
-  static const textSecondary = Color(0xFF64748B);   // Secondary text
+  static const textSecondary = Color(0xFF64748B);   // Secondary
   static const textMuted     = Color(0xFF94A3B8);   // Hint / caption
-  static const textDisabled  = Color(0xFFCBD5E1);   // Disabled text
-  static const textOnPrimary = Color(0xFFFFFFFF);   // Di atas primary gelap
-  static const textOnDark    = Color(0xFFF8FAFC);   // Di atas surface gelap
+  static const textDisabled  = Color(0xFFCBD5E1);   // Disabled
+  static const textOnPrimary = Color(0xFFFFFFFF);   // Di atas primary
+  static const textOnDark    = Color(0xFFF8FAFC);   // Di atas dark
 
   // ── Overlay ────────────────────────────────────────────
-  static const overlay       = Color(0x33000000);   // 20% black overlay
-  static const overlayLight  = Color(0x1A000000);   // 10% black overlay
-  static const overlayWhite  = Color(0x33FFFFFF);   // 20% white overlay
+  static const overlay       = Color(0x33000000);
+  static const overlayLight  = Color(0x1A000000);
+  static const overlayWhite  = Color(0x33FFFFFF);
 
   // ── Gradients ──────────────────────────────────────────
 
-  /// Header utama — biru muda gelap → biru muda, segar & kontras kuat.
+  /// Header — deep navy gradient.
   static const headerGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF075985), Color(0xFF0284C7), Color(0xFF0EA5E9)],
+    colors: [Color(0xFF0A1628), Color(0xFF162544), Color(0xFF1B3A5C)],
     stops: [0.0, 0.5, 1.0],
   );
 
-  /// Gradient brand ringan.
+  /// Primary gradient — navy to blue.
   static const primaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF0284C7), Color(0xFF38BDF8)],
+    colors: [Color(0xFF1B3A5C), Color(0xFF2E6AB4)],
   );
 
-  /// Gradient brand sangat ringan — untuk card background.
+  /// Accent gradient — bright blue.
+  static const accentGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF2563EB), Color(0xFF60A5FA)],
+  );
+
+  /// Soft gradient — untuk card bg.
   static const primarySoftGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFE0F2FE), Color(0xFFF0F9FF)],
+    colors: [Color(0xFFEBF2FA), Color(0xFFF5F7FA)],
   );
 
   static const clockInGradient = LinearGradient(
@@ -96,11 +103,11 @@ abstract final class AppColors {
     colors: [Color(0xFFDC2626), Color(0xFFF87171)],
   );
 
-  // ── Menu Card Gradients ────────────────────────────────
+  // ── Menu Card Gradients (bold, solid-feel) ─────────────
   static const skyGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF0284C7), Color(0xFF38BDF8)],
+    colors: [Color(0xFF1B3A5C), Color(0xFF2E6AB4)],
   );
 
   static const blueGradient = LinearGradient(
@@ -162,4 +169,8 @@ abstract final class AppColors {
     end: Alignment.bottomRight,
     colors: [Color(0xFF0891B2), Color(0xFF22D3EE)],
   );
+
+  // ── Secondary (kept for compatibility) ─────────────────
+  static const secondary      = Color(0xFF059669);
+  static const secondaryLight = Color(0xFF34D399);
 }

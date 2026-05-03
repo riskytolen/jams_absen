@@ -22,4 +22,16 @@ abstract final class SupabaseConfig {
     defaultValue:
         '[REDACTED]',
   );
+
+  /// Email untuk autentikasi background (melewati RLS).
+  static const serviceEmail = String.fromEnvironment(
+    'SUPABASE_SERVICE_EMAIL',
+    defaultValue: 'pegawai@jamslogistic.com',
+  );
+
+  /// Password untuk autentikasi background.
+  static const servicePassword = String.fromEnvironment(
+    'SUPABASE_SERVICE_PASSWORD',
+    defaultValue: '[REDACTED]',
+  );
 }

@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
-/// Reusable text styles yang sering dipakai di luar Theme context.
+/// Typography system — clean, bold, profesional.
 ///
-/// Gunakan ini untuk widget yang membutuhkan TextStyle langsung
-/// tanpa harus akses `Theme.of(context).textTheme`.
-///
-/// Untuk text di atas background gelap, gunakan varian `onDark`.
+/// Font: Plus Jakarta Sans — geometric, modern, highly readable.
 abstract final class AppTextStyles {
   static final _base = GoogleFonts.plusJakartaSans();
 
@@ -16,8 +13,8 @@ abstract final class AppTextStyles {
     fontSize: 40,
     fontWeight: FontWeight.w800,
     color: AppColors.textDark,
-    letterSpacing: -1,
-    height: 1.2,
+    letterSpacing: -1.2,
+    height: 1.1,
   );
 
   // ── Heading ───────────────────────────────────────────
@@ -26,7 +23,7 @@ abstract final class AppTextStyles {
     fontWeight: FontWeight.w800,
     color: AppColors.textDark,
     letterSpacing: -0.5,
-    height: 1.3,
+    height: 1.2,
   );
 
   static final h2 = _base.copyWith(
@@ -38,15 +35,15 @@ abstract final class AppTextStyles {
   );
 
   static final h3 = _base.copyWith(
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: FontWeight.w700,
     color: AppColors.textDark,
-    height: 1.4,
+    height: 1.3,
   );
 
   static final h4 = _base.copyWith(
-    fontSize: 16,
-    fontWeight: FontWeight.w600,
+    fontSize: 15,
+    fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
     height: 1.4,
   );
@@ -95,14 +92,14 @@ abstract final class AppTextStyles {
   // ── Button ────────────────────────────────────────────
   static final button = _base.copyWith(
     fontSize: 15,
-    fontWeight: FontWeight.w600,
+    fontWeight: FontWeight.w700,
     color: AppColors.textOnPrimary,
   );
 
   static final buttonSm = _base.copyWith(
     fontSize: 13,
     fontWeight: FontWeight.w600,
-    color: AppColors.primary600,
+    color: AppColors.accent,
   );
 
   // ── On Dark (untuk di atas background gelap) ──────────
@@ -115,24 +112,24 @@ abstract final class AppTextStyles {
   static final onDarkBody = _base.copyWith(
     fontSize: 13,
     fontWeight: FontWeight.w500,
-    color: const Color(0xE6FFFFFF), // 90% white
+    color: const Color(0xE6FFFFFF),
   );
 
   static final onDarkCaption = _base.copyWith(
     fontSize: 12,
     fontWeight: FontWeight.w500,
-    color: const Color(0xB3FFFFFF), // 70% white
+    color: const Color(0xB3FFFFFF),
   );
 
   static final onDarkMuted = _base.copyWith(
     fontSize: 11,
     fontWeight: FontWeight.w400,
-    color: const Color(0x80FFFFFF), // 50% white
+    color: const Color(0x80FFFFFF),
   );
 
   // ── Numeric / Tabular ─────────────────────────────────
   static final numericLg = _base.copyWith(
-    fontSize: 38,
+    fontSize: 36,
     fontWeight: FontWeight.w800,
     color: Colors.white,
     letterSpacing: 2,
@@ -140,7 +137,7 @@ abstract final class AppTextStyles {
   );
 
   static final numericMd = _base.copyWith(
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: FontWeight.w800,
     color: AppColors.textDark,
     fontFeatures: const [FontFeature.tabularFigures()],

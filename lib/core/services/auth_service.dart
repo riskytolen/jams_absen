@@ -76,7 +76,10 @@ abstract final class AuthService {
     }
 
     try {
-      // ── 2. Query pegawai ──
+      // ── 2. Pastikan Supabase Auth aktif (untuk RLS) ──
+      await SupabaseService.ensureAuthenticated();
+
+      // ── 3. Query pegawai ──
       final response = await SupabaseService.client
           .from('pegawai')
           .select('*, jabatan:jabatan_id(id, nama)')
@@ -93,7 +96,7 @@ abstract final class AuthService {
 
       final pegawai = Pegawai.fromMap(response);
 
-      // ── 3. Cek status aktif ──
+      // ── 4. Cek status aktif ──
       if (!pegawai.isAktif) {
         throw AuthException(
           type: AuthErrorType.inactive,
@@ -102,7 +105,7 @@ abstract final class AuthService {
         );
       }
 
-      // ── 4. Device binding ──
+      // ── 5. Device binding ──
       await _verifyDeviceBinding(pegawai);
 
       _currentPegawai = pegawai;
@@ -157,6 +160,9 @@ abstract final class AuthService {
               'Pastikan aplikasi memiliki izin yang diperlukan, lalu coba lagi.',
         );
       }
+
+      // Pastikan auth aktif untuk melewati RLS pada employee_devices
+      await SupabaseService.ensureAuthenticated();
 
       final client = SupabaseService.client;
 
@@ -238,8 +244,9 @@ abstract final class AuthService {
       }).eq('id', recordId);
     } on AuthException {
       rethrow;
-    } catch (e) {
+    } catch (e, stack) {
       debugPrint('[DeviceBinding] Error: $e');
+      debugPrint('[DeviceBinding] Stack: $stack');
       throw AuthException(
         type: AuthErrorType.unknown,
         message: 'Gagal memverifikasi perangkat. Silakan coba lagi.',

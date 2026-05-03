@@ -1,12 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/greeting_helper.dart';
-import '../../../widgets/cards/live_clock_widget.dart';
 
-/// Header dashboard — profil, jam, dan info absen hari ini.
+/// Header dashboard — Deep Navy, corporate, clean.
 class DashboardHeader extends StatelessWidget {
   final String userName;
   final String department;
@@ -18,6 +18,7 @@ class DashboardHeader extends StatelessWidget {
   final VoidCallback? onNotificationTap;
   final VoidCallback? onAvatarTap;
   final VoidCallback? onLogoutTap;
+  final VoidCallback? onAbsenTap;
 
   const DashboardHeader({
     super.key,
@@ -31,6 +32,7 @@ class DashboardHeader extends StatelessWidget {
     this.onNotificationTap,
     this.onAvatarTap,
     this.onLogoutTap,
+    this.onAbsenTap,
   });
 
   @override
@@ -39,17 +41,14 @@ class DashboardHeader extends StatelessWidget {
       decoration: const BoxDecoration(
         gradient: AppColors.headerGradient,
         borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(AppSpacing.radiusXxl + 4),
+          bottom: Radius.circular(28),
         ),
       ),
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xl,
-          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _TopBar(
                 userName: userName,
@@ -59,14 +58,13 @@ class DashboardHeader extends StatelessWidget {
                 onAvatarTap: onAvatarTap,
                 onLogoutTap: onLogoutTap,
               ),
-              const SizedBox(height: AppSpacing.xl),
-              const LiveClockWidget(),
-              const SizedBox(height: AppSpacing.sm),
-              _DepartmentChip(department: department, position: position),
-              const SizedBox(height: AppSpacing.lg),
-              _AttendanceStrip(
+              const SizedBox(height: 24),
+              _ClockCard(
                 hasCheckedIn: hasCheckedIn,
                 clockInTime: clockInTime,
+                department: department,
+                position: position,
+                onAbsenTap: onAbsenTap,
               ),
             ],
           ),
@@ -100,71 +98,76 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        // Avatar
         GestureDetector(
           onTap: onAvatarTap,
           child: Container(
-            padding: const EdgeInsets.all(2.5),
+            padding: const EdgeInsets.all(2),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
+              border: Border.all(
+                color: AppColors.accent.withValues(alpha: 0.6),
+                width: 2,
+              ),
             ),
             child: CircleAvatar(
-              radius: 21,
-              backgroundColor: Colors.white.withValues(alpha: 0.20),
+              radius: 20,
+              backgroundColor: AppColors.primary600,
               backgroundImage:
                   avatarUrl != null ? NetworkImage(avatarUrl!) : null,
               child: avatarUrl == null
-                  ? const Icon(
-                      Icons.person_rounded,
-                      color: Colors.white,
-                      size: AppSpacing.iconMd,
-                    )
+                  ? const Icon(Icons.person_rounded,
+                      color: Colors.white, size: 20)
                   : null,
             ),
           ),
         ),
-        const SizedBox(width: AppSpacing.md + 2),
-
-        // Greeting + name
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 '${GreetingHelper.greeting} ${GreetingHelper.emoji}',
-                style: AppTextStyles.onDarkBody,
+                style: AppTextStyles.onDarkMuted.copyWith(fontSize: 12),
               ),
               const SizedBox(height: 2),
               Text(
                 userName,
-                style: AppTextStyles.onDarkTitle,
+                style: AppTextStyles.onDarkTitle.copyWith(fontSize: 16),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
         ),
-
-        _NotificationBell(
-          count: notificationCount,
+        _HeaderAction(
+          icon: Icons.notifications_outlined,
+          badgeCount: notificationCount,
           onTap: onNotificationTap,
         ),
-        const SizedBox(width: AppSpacing.sm),
-        _LogoutButton(onTap: onLogoutTap),
+        const SizedBox(width: 8),
+        _HeaderAction(
+          icon: Icons.logout_rounded,
+          onTap: onLogoutTap,
+        ),
       ],
     );
   }
 }
 
 // ═════════════════════════════════════════════════════════
-// NOTIFICATION BELL
+// HEADER ACTION BUTTON
 // ═════════════════════════════════════════════════════════
-class _NotificationBell extends StatelessWidget {
-  final int count;
+class _HeaderAction extends StatelessWidget {
+  final IconData icon;
+  final int badgeCount;
   final VoidCallback? onTap;
 
-  const _NotificationBell({required this.count, this.onTap});
+  const _HeaderAction({
+    required this.icon,
+    this.badgeCount = 0,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -177,31 +180,25 @@ class _NotificationBell extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.20),
-              ),
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(
-              Icons.notifications_outlined,
-              color: Colors.white,
-              size: AppSpacing.iconMd,
-            ),
+            child: Icon(icon, color: Colors.white.withValues(alpha: 0.8), size: 20),
           ),
-          if (count > 0)
+          if (badgeCount > 0)
             Positioned(
-              right: 5,
-              top: 5,
+              right: 3,
+              top: 3,
               child: Container(
-                width: 11,
-                height: 11,
+                width: 9,
+                height: 9,
                 decoration: BoxDecoration(
                   color: AppColors.error,
                   shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.primary800, width: 2),
+                  border: Border.all(color: AppColors.primary900, width: 1.5),
                 ),
               ),
             ),
@@ -212,178 +209,233 @@ class _NotificationBell extends StatelessWidget {
 }
 
 // ═════════════════════════════════════════════════════════
-// LOGOUT BUTTON
+// CLOCK CARD
 // ═════════════════════════════════════════════════════════
-class _LogoutButton extends StatelessWidget {
-  final VoidCallback? onTap;
-
-  const _LogoutButton({this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        onTap?.call();
-      },
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.20),
-          ),
-        ),
-        child: const Icon(
-          Icons.logout_rounded,
-          color: Colors.white,
-          size: AppSpacing.iconMd,
-        ),
-      ),
-    );
-  }
-}
-
-// ═════════════════════════════════════════════════════════
-// DEPARTMENT CHIP
-// ═════════════════════════════════════════════════════════
-class _DepartmentChip extends StatelessWidget {
-  final String department;
-  final String position;
-
-  const _DepartmentChip({required this.department, required this.position});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.badge_rounded,
-            color: Colors.white.withValues(alpha: 0.85),
-            size: AppSpacing.iconXs,
-          ),
-          const SizedBox(width: AppSpacing.sm - 2),
-          Text(
-            '$department  \u2022  $position',
-            style: AppTextStyles.onDarkCaption,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ═════════════════════════════════════════════════════════
-// ATTENDANCE INFO STRIP
-// ═════════════════════════════════════════════════════════
-class _AttendanceStrip extends StatelessWidget {
+class _ClockCard extends StatefulWidget {
   final bool hasCheckedIn;
   final String? clockInTime;
+  final String department;
+  final String position;
+  final VoidCallback? onAbsenTap;
 
-  const _AttendanceStrip({required this.hasCheckedIn, this.clockInTime});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        vertical: AppSpacing.base,
-        horizontal: AppSpacing.md,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-      ),
-      child: Row(
-        children: [
-          _StripItem(
-            icon: Icons.login_rounded,
-            label: 'Jam Masuk',
-            value: clockInTime ?? '--:--',
-            isActive: hasCheckedIn,
-          ),
-          const _StripDivider(),
-          _StripItem(
-            icon: hasCheckedIn
-                ? Icons.check_circle_rounded
-                : Icons.schedule_rounded,
-            label: 'Status',
-            value: hasCheckedIn ? 'Tepat Waktu' : 'Menunggu',
-            isActive: hasCheckedIn,
-          ),
-          const _StripDivider(),
-          const _StripItem(
-            icon: Icons.face_rounded,
-            label: 'Metode',
-            value: 'Face ID',
-            isActive: false,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StripItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final bool isActive;
-
-  const _StripItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.isActive,
+  const _ClockCard({
+    required this.hasCheckedIn,
+    required this.department,
+    required this.position,
+    this.clockInTime,
+    this.onAbsenTap,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final iconColor = isActive ? AppColors.secondaryLight : Colors.white;
+  State<_ClockCard> createState() => _ClockCardState();
+}
 
-    return Expanded(
+class _ClockCardState extends State<_ClockCard> {
+  late Timer _timer;
+  DateTime _now = DateTime.now();
+
+  static final _timeFormat = DateFormat('HH:mm');
+  static final _secFormat = DateFormat('ss');
+  static final _dateFormat = DateFormat('EEEE, dd MMMM yyyy', 'id_ID');
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
       child: Column(
         children: [
-          Icon(icon, color: iconColor, size: AppSpacing.iconMd),
-          const SizedBox(height: 7),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          // ── Department badge ──
+          Row(
+            children: [
+              Icon(
+                Icons.badge_outlined,
+                color: Colors.white.withValues(alpha: 0.5),
+                size: 14,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  '${widget.department} \u2022 ${widget.position}',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 3),
-          Text(label, style: AppTextStyles.onDarkMuted),
+
+          const SizedBox(height: 16),
+
+          // ── Time ──
+          RepaintBoundary(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  _timeFormat.format(_now),
+                  style: AppTextStyles.numericLg.copyWith(
+                    fontSize: 48,
+                    letterSpacing: 2,
+                    height: 1,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _secFormat.format(_now),
+                  style: AppTextStyles.numericLg.copyWith(
+                    fontSize: 20,
+                    color: AppColors.accentLight,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _dateFormat.format(_now),
+            style: AppTextStyles.onDarkCaption.copyWith(
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.6),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Absen button ──
+          _AbsenButton(
+            hasCheckedIn: widget.hasCheckedIn,
+            clockInTime: widget.clockInTime,
+            onTap: widget.onAbsenTap,
+          ),
         ],
       ),
     );
   }
 }
 
-class _StripDivider extends StatelessWidget {
-  const _StripDivider();
+// ═════════════════════════════════════════════════════════
+// ABSEN BUTTON — full width, di dalam clock card
+// ═════════════════════════════════════════════════════════
+class _AbsenButton extends StatefulWidget {
+  final bool hasCheckedIn;
+  final String? clockInTime;
+  final VoidCallback? onTap;
+
+  const _AbsenButton({
+    required this.hasCheckedIn,
+    this.clockInTime,
+    this.onTap,
+  });
+
+  @override
+  State<_AbsenButton> createState() => _AbsenButtonState();
+}
+
+class _AbsenButtonState extends State<_AbsenButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 80),
+    );
+    _scale = Tween(begin: 1.0, end: 0.97).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 40,
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-      color: Colors.white.withValues(alpha: 0.20),
+    final checked = widget.hasCheckedIn;
+
+    return GestureDetector(
+      onTapDown: checked ? null : (_) => _ctrl.forward(),
+      onTapUp: checked
+          ? null
+          : (_) {
+              _ctrl.reverse();
+              HapticFeedback.mediumImpact();
+              widget.onTap?.call();
+            },
+      onTapCancel: checked ? null : () => _ctrl.reverse(),
+      child: ListenableBuilder(
+        listenable: _scale,
+        builder: (_, child) =>
+            Transform.scale(scale: _scale.value, child: child),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            gradient: checked ? null : AppColors.accentGradient,
+            color: checked ? AppColors.success : null,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: checked
+                ? []
+                : [
+                    BoxShadow(
+                      color: AppColors.accent.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                checked
+                    ? Icons.verified_rounded
+                    : Icons.face_retouching_natural_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                checked ? 'Tercatat Masuk ${widget.clockInTime}' : 'Absen Masuk',
+                style: AppTextStyles.button.copyWith(fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

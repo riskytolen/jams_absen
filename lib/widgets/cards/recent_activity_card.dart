@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_shadows.dart';
-import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../models/activity_item_model.dart';
 
-// Re-export agar import lama tetap bekerja
+// Re-export
 export '../../models/activity_item_model.dart';
 
-/// Card yang menampilkan daftar aktivitas terbaru.
-///
-/// Menampilkan empty state jika [activities] kosong.
+/// Card aktivitas terbaru — timeline style.
 class RecentActivityCard extends StatelessWidget {
   final List<ActivityItem> activities;
   final VoidCallback? onViewAll;
@@ -23,76 +19,104 @@ class RecentActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context).textTheme;
-
-    return Container(
-      margin: AppSpacing.screenH,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-        boxShadow: AppShadows.card,
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.md,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Aktivitas Terbaru', style: theme.titleSmall),
-                GestureDetector(
-                  onTap: onViewAll,
-                  child: Text(
-                    'Lihat Semua',
-                    style: AppTextStyles.buttonSm,
+          // ── Header (di luar card) ──
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Aktivitas Terbaru', style: AppTextStyles.h4),
+              GestureDetector(
+                onTap: onViewAll,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(20),
                   ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Semua',
+                        style: AppTextStyles.buttonSm.copyWith(fontSize: 11),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 10,
+                        color: AppColors.accent,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // ── Card ──
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                  blurRadius: 16,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
+            child: activities.isEmpty
+                ? _EmptyState()
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                    child: Column(
+                      children: activities.asMap().entries.map((e) {
+                        final isLast = e.key == activities.length - 1;
+                        return _TimelineTile(item: e.value, isLast: isLast);
+                      }).toList(),
+                    ),
+                  ),
           ),
-
-          // Items atau Empty State
-          if (activities.isEmpty)
-            _EmptyState()
-          else
-            ...activities.asMap().entries.map((e) {
-              return _ActivityTile(
-                item: e.value,
-                showDivider: e.key < activities.length - 1,
-              );
-            }),
-          const SizedBox(height: AppSpacing.sm),
         ],
       ),
     );
   }
 }
 
-// ── Empty State ──────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
+// EMPTY STATE
+// ═════════════════════════════════════════════════════════
 class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: AppSpacing.xxl,
-        horizontal: AppSpacing.lg,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
       child: Column(
         children: [
-          Icon(
-            Icons.inbox_rounded,
-            size: AppSpacing.huge,
-            color: AppColors.textMuted.withValues(alpha: 0.5),
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.inbox_rounded,
+              size: 26,
+              color: AppColors.textMuted.withValues(alpha: 0.4),
+            ),
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: 12),
           Text(
             'Belum ada aktivitas',
-            style: AppTextStyles.body.copyWith(color: AppColors.textMuted),
+            style: AppTextStyles.label.copyWith(color: AppColors.textMuted),
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: 4),
           Text(
             'Aktivitas absensi akan muncul di sini',
             style: AppTextStyles.caption,
@@ -103,71 +127,112 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ── Activity Tile ────────────────────────────────────────
-class _ActivityTile extends StatelessWidget {
+// ═════════════════════════════════════════════════════════
+// TIMELINE TILE
+// ═════════════════════════════════════════════════════════
+class _TimelineTile extends StatelessWidget {
   final ActivityItem item;
-  final bool showDivider;
+  final bool isLast;
 
-  const _ActivityTile({required this.item, required this.showDivider});
+  const _TimelineTile({required this.item, required this.isLast});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      child: Column(
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-            child: Row(
+          // ── Timeline line + dot ──
+          SizedBox(
+            width: 24,
+            child: Column(
               children: [
-                // Icon
+                const SizedBox(height: 14),
+                // Dot
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  width: 10,
+                  height: 10,
                   decoration: BoxDecoration(
-                    color: item.color.withValues(alpha: 0.10),
-                    borderRadius:
-                        BorderRadius.circular(AppSpacing.radiusMd),
-                  ),
-                  child: Icon(
-                    item.icon,
                     color: item.color,
-                    size: AppSpacing.iconLg - 4,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md + 2),
-
-                // Text
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        style: AppTextStyles.label.copyWith(fontSize: 13.5),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item.subtitle,
-                        style: AppTextStyles.caption.copyWith(fontSize: 12),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: item.color.withValues(alpha: 0.3),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
                       ),
                     ],
                   ),
                 ),
-
-                const SizedBox(width: AppSpacing.sm),
-
-                // Time
-                Text(item.time, style: AppTextStyles.labelSm),
+                // Line
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 1.5,
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      color: AppColors.border.withValues(alpha: 0.5),
+                    ),
+                  ),
               ],
             ),
           ),
-          if (showDivider)
-            Divider(
-              height: 1,
-              color: AppColors.border.withValues(alpha: 0.5),
+          const SizedBox(width: 10),
+
+          // ── Content ──
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  // Icon
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: item.color.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Icon(item.icon, color: item.color, size: 16),
+                  ),
+                  const SizedBox(width: 10),
+                  // Text
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          style: AppTextStyles.label.copyWith(fontSize: 12.5),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          item.subtitle,
+                          style: AppTextStyles.caption.copyWith(fontSize: 10.5),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  // Time
+                  Text(
+                    item.time,
+                    style: AppTextStyles.caption.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 10.5,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
+          ),
         ],
       ),
     );

@@ -12,9 +12,9 @@ import '../profile/profile_screen.dart';
 import 'widgets/dashboard_header.dart';
 import 'widgets/stats_section.dart';
 import 'widgets/menu_grid_section.dart';
-import 'widgets/bottom_nav_bar.dart';
 
-/// Halaman utama dashboard aplikasi absen.
+
+/// Dashboard — Deep Navy, corporate, card-based layout.
 class DashboardScreen extends StatefulWidget {
   final Pegawai pegawai;
 
@@ -27,7 +27,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _hasCheckedIn = false;
   String? _clockInTime;
-  int _navIndex = 0;
   late Pegawai _pegawai;
 
   @override
@@ -36,29 +35,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _pegawai = widget.pegawai;
   }
 
-  // ── Menu items ─────────────────────────────────────────
+  // ── Menu items (2 kolom grid, card per item) ────────────
   List<MenuItemModel> get _menuItems => [
         MenuItemModel(
-          title: 'Riwayat Absen',
-          subtitle: 'Lihat catatan absensi',
+          title: 'Riwayat',
+          subtitle: 'Catatan kehadiran',
           icon: Icons.history_rounded,
           gradient: AppColors.skyGradient,
           onTap: () => _onMenuTap('Riwayat Absen'),
         ),
         MenuItemModel(
-          title: 'Cuti & Izin',
+          title: 'Cuti',
           subtitle: 'Ajukan permohonan',
           icon: Icons.event_note_rounded,
           gradient: AppColors.orangeGradient,
           badge: '2',
           onTap: () => _onMenuTap('Cuti & Izin'),
-        ),
-        MenuItemModel(
-          title: 'Profil',
-          subtitle: 'Data pribadi anda',
-          icon: Icons.person_rounded,
-          gradient: AppColors.purpleGradient,
-          onTap: _openProfile,
         ),
         MenuItemModel(
           title: 'Pendapatan',
@@ -68,12 +60,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTap: () => _onMenuTap('Pendapatan'),
         ),
         MenuItemModel(
-          title: 'Pengumuman',
+          title: 'Info',
           subtitle: 'Info perusahaan',
           icon: Icons.campaign_rounded,
           gradient: AppColors.amberGradient,
           badge: '3',
           onTap: () => _onMenuTap('Pengumuman'),
+        ),
+        MenuItemModel(
+          title: 'Jadwal',
+          subtitle: 'Shift & kalender',
+          icon: Icons.calendar_month_rounded,
+          gradient: AppColors.blueGradient,
+          onTap: () => _onMenuTap('Jadwal Kerja'),
+        ),
+        MenuItemModel(
+          title: 'Dokumen',
+          subtitle: 'File & surat',
+          icon: Icons.folder_rounded,
+          gradient: AppColors.cyanGradient,
+          onTap: () => _onMenuTap('Dokumen'),
+        ),
+        MenuItemModel(
+          title: 'Profil',
+          subtitle: 'Data pribadi',
+          icon: Icons.person_rounded,
+          gradient: AppColors.purpleGradient,
+          onTap: _openProfile,
         ),
         MenuItemModel(
           title: 'Pengaturan',
@@ -89,16 +102,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (_hasCheckedIn)
           ActivityItem(
             title: 'Absen Masuk',
-            subtitle: 'QR Code terverifikasi \u2014 Tepat waktu',
+            subtitle: 'Terverifikasi \u2014 Tepat waktu',
             time: _clockInTime ?? '--:--',
-            icon: Icons.qr_code_scanner_rounded,
+            icon: Icons.login_rounded,
             color: AppColors.success,
           ),
         const ActivityItem(
           title: 'Absen Masuk',
-          subtitle: 'QR Code terverifikasi \u2014 Tepat waktu',
+          subtitle: 'Terverifikasi \u2014 Tepat waktu',
           time: '08:02',
-          icon: Icons.qr_code_scanner_rounded,
+          icon: Icons.login_rounded,
           color: AppColors.success,
         ),
         const ActivityItem(
@@ -110,29 +123,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const ActivityItem(
           title: 'Absen Masuk',
-          subtitle: 'QR Code terverifikasi \u2014 Terlambat 5 mnt',
+          subtitle: 'Terverifikasi \u2014 Terlambat 5 mnt',
           time: '2 hari lalu',
-          icon: Icons.qr_code_scanner_rounded,
+          icon: Icons.login_rounded,
           color: AppColors.warning,
-        ),
-        const ActivityItem(
-          title: 'Lembur',
-          subtitle: '2 jam lembur tercatat',
-          time: '3 hari lalu',
-          icon: Icons.more_time_rounded,
-          color: AppColors.primary600,
         ),
       ];
 
   // ── Callbacks ──────────────────────────────────────────
-  void _onTabChanged(int index) {
-    if (index == 4) {
-      _openProfile();
-      return;
-    }
-    setState(() => _navIndex = index);
-  }
-
   Future<void> _openProfile() async {
     final updated = await Navigator.of(context).push<Pegawai>(
       MaterialPageRoute(
@@ -158,6 +156,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
         title: const Text('Keluar'),
         content: const Text('Apakah Anda yakin ingin keluar dari aplikasi?'),
         actions: [
@@ -213,14 +214,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       SnackBar(
         content: const Row(
           children: [
-            Icon(Icons.verified_rounded, color: Colors.white, size: 20),
+            Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
             SizedBox(width: 10),
-            Expanded(
-              child: Text('Absen berhasil tercatat!'),
-            ),
+            Expanded(child: Text('Absen berhasil tercatat!')),
           ],
         ),
         backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -240,7 +243,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             parent: AlwaysScrollableScrollPhysics(),
           ),
           slivers: [
-            // ── Header (profil + jam + info absen) ──
+            // ── Header ──
             SliverToBoxAdapter(
               child: DashboardHeader(
                 userName: _pegawai.nama,
@@ -253,18 +256,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onNotificationTap: () => _onMenuTap('Notifikasi'),
                 onAvatarTap: _openProfile,
                 onLogoutTap: _onLogout,
+                onAbsenTap: _onScanFace,
               ),
             ),
 
             // ── Body ──
             SliverToBoxAdapter(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(height: 24),
 
-                  // Menu grid
+                  // Menu
                   MenuGridSection(items: _menuItems),
-                  const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(height: 12),
+
+                  // Stats
+                  const StatsSection(monthLabel: 'Mei 2026'),
+                  const SizedBox(height: 12),
 
                   // Attendance progress
                   const AttendanceProgressCard(
@@ -272,11 +281,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     totalPresent: 20,
                     workingDays: 22,
                   ),
-                  const SizedBox(height: AppSpacing.xl),
-
-                  // Stats
-                  const StatsSection(monthLabel: 'April 2026'),
-                  const SizedBox(height: AppSpacing.xxl),
+                  const SizedBox(height: 12),
 
                   // Recent activity
                   RecentActivityCard(
@@ -284,18 +289,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onViewAll: () => _onMenuTap('Riwayat Aktivitas'),
                   ),
 
-                  // Bottom padding agar konten tidak tertutup nav bar
-                  const SizedBox(height: 100),
+                  // Bottom safe area padding (untuk tombol bawaan HP)
+                  SizedBox(height: MediaQuery.of(context).padding.bottom + 24),
                 ],
               ),
             ),
           ],
-        ),
-        bottomNavigationBar: DashboardBottomNav(
-          currentIndex: _navIndex,
-          hasCheckedIn: _hasCheckedIn,
-          onTabChanged: _onTabChanged,
-          onScanFace: _onScanFace,
         ),
       ),
     );

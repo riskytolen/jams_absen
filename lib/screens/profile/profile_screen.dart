@@ -51,6 +51,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isRefreshing = true);
 
     try {
+      await SupabaseService.ensureAuthenticated();
       final response = await SupabaseService.client
           .from('pegawai')
           .select('*, jabatan:jabatan_id(id, nama)')

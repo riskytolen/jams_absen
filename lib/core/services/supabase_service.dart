@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
 
@@ -14,7 +15,12 @@ import '../config/supabase_config.dart';
 /// final data = await client.from('employees').select();
 /// ```
 abstract final class SupabaseService {
-  /// Inisialisasi Supabase. Panggil sekali di `main()`.
+  /// Inisialisasi Supabase + background auth untuk melewati RLS.
+  ///
+  /// Flow:
+  /// 1. Initialize Supabase SDK
+  /// 2. Cek apakah sudah ada session aktif (dari persistent storage)
+  /// 3. Jika belum → sign in dengan service account
   static Future<void> initialize() async {
     await Supabase.initialize(
       url: SupabaseConfig.supabaseUrl,
@@ -26,6 +32,9 @@ abstract final class SupabaseService {
         logLevel: RealtimeLogLevel.info,
       ),
     );
+
+    // Background auth — sign in agar request melewati RLS
+    await _ensureAuthenticated();
   }
 
   /// Supabase client instance — shortcut ke `Supabase.instance.client`.
@@ -34,14 +43,73 @@ abstract final class SupabaseService {
   /// Auth instance — shortcut untuk operasi autentikasi.
   static GoTrueClient get auth => client.auth;
 
-  /// Cek apakah user sedang login.
+  /// Cek apakah sudah ter-autentikasi ke Supabase Auth.
   static bool get isAuthenticated => auth.currentSession != null;
 
   /// User yang sedang login, atau null.
   static User? get currentUser => auth.currentUser;
 
-  /// Sign out user.
+  /// Pastikan sudah ter-autentikasi. Panggil sebelum operasi database
+  /// yang membutuhkan RLS.
+  ///
+  /// Jika session expired atau belum ada, otomatis sign in ulang.
+  static Future<void> ensureAuthenticated() async {
+    await _ensureAuthenticated();
+  }
+
+  /// Sign out dari Supabase Auth.
   static Future<void> signOut() async {
     await auth.signOut();
+  }
+
+  // ── Internal: pastikan ada session aktif ──────────────
+  static Future<void> _ensureAuthenticated() async {
+    try {
+      final session = auth.currentSession;
+
+      if (session != null) {
+        // Session ada — cek apakah expired
+        final isExpired = session.isExpired;
+
+        if (!isExpired) {
+          debugPrint('[SupabaseService] Session aktif, skip sign-in.');
+          return;
+        }
+
+        // Session expired → coba refresh dulu
+        debugPrint('[SupabaseService] Session expired, refreshing...');
+        try {
+          await auth.refreshSession();
+          debugPrint('[SupabaseService] Session refreshed.');
+          return;
+        } catch (e) {
+          debugPrint('[SupabaseService] Refresh gagal, sign-in ulang...');
+        }
+      }
+
+      // Belum ada session atau refresh gagal → sign in
+      await _signInBackground();
+    } catch (e) {
+      debugPrint('[SupabaseService] Auth error: $e');
+      // Jangan throw — biarkan app tetap jalan.
+      // Query tanpa auth akan gagal karena RLS, tapi error
+      // ditangani di masing-masing service.
+    }
+  }
+
+  /// Sign in dengan service account di background.
+  static Future<void> _signInBackground() async {
+    debugPrint('[SupabaseService] Signing in background...');
+
+    final response = await auth.signInWithPassword(
+      email: SupabaseConfig.serviceEmail,
+      password: SupabaseConfig.servicePassword,
+    );
+
+    if (response.session != null) {
+      debugPrint('[SupabaseService] Background auth berhasil.');
+    } else {
+      debugPrint('[SupabaseService] Background auth gagal: no session.');
+    }
   }
 }
