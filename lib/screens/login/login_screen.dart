@@ -208,6 +208,10 @@ class _LoginScreenState extends State<LoginScreen>
 
       case LocationErrorType.timeout:
       case LocationErrorType.unknown:
+      case LocationErrorType.fakeGPSDetected:
+      case LocationErrorType.poorAccuracy:
+      case LocationErrorType.suspiciousActivity:
+      case LocationErrorType.deviceCompromised:
         AppNotification.show(
           context,
           type: NotificationType.error,

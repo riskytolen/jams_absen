@@ -1,18 +1,40 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+
+import 'gps_security_service.dart';
+import 'security_logger.dart';
+
+// ═══════════════════════════════════════════════════════════
+// LOCATION ERROR TYPES
+// ═══════════════════════════════════════════════════════════
 
 /// Tipe error lokasi.
 enum LocationErrorType {
-  /// GPS / Location Service dimatikan di perangkat.
+  /// GPS/Location service tidak aktif.
   serviceDisabled,
 
-  /// Permission lokasi ditolak user.
+  /// Permission ditolak.
   permissionDenied,
 
-  /// Permission lokasi ditolak permanen (harus buka Settings).
+  /// Permission ditolak permanen.
   permissionDeniedForever,
 
-  /// Timeout saat mengambil posisi.
+  /// Timeout saat mengambil lokasi.
   timeout,
+
+  /// Fake GPS / mock location terdeteksi.
+  fakeGPSDetected,
+
+  /// Akurasi GPS terlalu rendah.
+  poorAccuracy,
+
+  /// Aktivitas mencurigakan (speed, jump, dll).
+  suspiciousActivity,
+
+  /// Device tidak aman (root, emulator, mock apps).
+  deviceCompromised,
 
   /// Error tidak diketahui.
   unknown,
@@ -22,118 +44,257 @@ enum LocationErrorType {
 class LocationException implements Exception {
   final LocationErrorType type;
   final String message;
+  final Map<String, dynamic>? details;
 
   const LocationException({
     required this.type,
     required this.message,
+    this.details,
   });
 
   @override
-  String toString() => message;
+  String toString() => 'LocationException($type): $message';
 }
 
-/// Service lokasi — handle permission, GPS, dan akurasi tinggi.
+// ═══════════════════════════════════════════════════════════
+// LOCATION SERVICE
+// ═══════════════════════════════════════════════════════════
+
+/// Service untuk mengambil lokasi dengan validasi keamanan.
 ///
-/// Panggil [ensureReady] di awal untuk memastikan semua siap:
-/// - Location service aktif (GPS on)
-/// - Permission granted
-///
-/// Panggil [getCurrentPosition] untuk ambil posisi akurat.
+/// Flow:
+/// 1. Cek GPS enabled + permission
+/// 2. Cek device security (root, mock apps, emulator)
+/// 3. Ambil posisi GPS
+/// 4. Validasi keamanan (mock flag, accuracy, timestamp, movement)
+/// 5. Return posisi yang sudah tervalidasi
 abstract final class LocationService {
-  /// Pastikan lokasi siap digunakan.
+  static String? _employeeId;
+
+  /// Set employee ID untuk logging.
+  static void setEmployeeId(String employeeId) {
+    _employeeId = employeeId;
+  }
+
+  /// Pastikan GPS ready (service aktif + permission granted).
   ///
-  /// Cek berurutan:
-  /// 1. Apakah GPS / Location Service aktif?
-  /// 2. Apakah permission sudah granted?
-  /// 3. Jika belum → minta permission
-  ///
-  /// Throws [LocationException] jika gagal.
+  /// Throws [LocationException] jika tidak ready.
   static Future<void> ensureReady() async {
-    // 1. Cek GPS aktif
+    // Check service enabled
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       throw const LocationException(
         type: LocationErrorType.serviceDisabled,
-        message: 'GPS tidak aktif. '
-            'Aktifkan GPS di pengaturan perangkat Anda untuk melanjutkan.',
+        message: 'Layanan lokasi tidak aktif. Aktifkan GPS Anda.',
       );
     }
 
-    // 2. Cek & minta permission
+    // Check permission
     var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        throw const LocationException(
+          type: LocationErrorType.permissionDenied,
+          message: 'Izin lokasi ditolak. Aplikasi membutuhkan akses lokasi.',
+        );
+      }
+    }
 
     if (permission == LocationPermission.deniedForever) {
       throw const LocationException(
         type: LocationErrorType.permissionDeniedForever,
-        message: 'Izin lokasi ditolak secara permanen. '
-            'Buka Pengaturan > Aplikasi > Jams Attendance > Izin, '
-            'lalu aktifkan izin Lokasi.',
+        message: 'Izin lokasi ditolak permanen. Buka pengaturan untuk mengizinkan.',
       );
-    }
-
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-
-      if (permission == LocationPermission.denied) {
-        throw const LocationException(
-          type: LocationErrorType.permissionDenied,
-          message: 'Izin lokasi diperlukan untuk absensi. '
-              'Berikan izin lokasi agar aplikasi dapat berfungsi.',
-        );
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        throw const LocationException(
-          type: LocationErrorType.permissionDeniedForever,
-          message: 'Izin lokasi ditolak secara permanen. '
-              'Buka Pengaturan > Aplikasi > Jams Attendance > Izin, '
-              'lalu aktifkan izin Lokasi.',
-        );
-      }
     }
   }
 
-  /// Ambil posisi saat ini dengan akurasi tinggi.
+  /// Ambil posisi GPS dengan validasi keamanan penuh.
   ///
-  /// Timeout 10 detik. Throws [LocationException] jika gagal.
-  static Future<Position> getCurrentPosition() async {
-    try {
-      // Pastikan ready dulu
-      await ensureReady();
+  /// Flow:
+  /// 1. Device security check
+  /// 2. Get GPS position
+  /// 3. Validate position (mock, accuracy, timestamp, movement)
+  /// 4. Log result
+  ///
+  /// Throws [LocationException] jika gagal atau terdeteksi ancaman.
+  static Future<Position> getCurrentPosition({
+    List<Map<String, double>>? allowedAreas,
+  }) async {
+    // ── Step 1: Device security pre-check ──
+    final deviceStatus = await GPSSecurityService.checkDeviceSecurity();
+    if (!deviceStatus.isSafe) {
+      final threat = deviceStatus.threats.first;
+      _logThreat(threat);
+      throw LocationException(
+        type: _mapThreatToErrorType(threat.threat),
+        message: threat.message,
+        details: threat.details,
+      );
+    }
 
-      return await Geolocator.getCurrentPosition(
+    // ── Step 2: Get GPS position ──
+    final Position position;
+    try {
+      position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
+          timeLimit: Duration(seconds: 15),
         ),
       );
-    } on LocationException {
-      rethrow;
+    } on TimeoutException {
+      throw const LocationException(
+        type: LocationErrorType.timeout,
+        message: 'Timeout mengambil lokasi. Pastikan GPS aktif dan di area terbuka.',
+      );
     } catch (e) {
-      final msg = e.toString().toLowerCase();
-
-      if (msg.contains('timeout') || msg.contains('timed out')) {
-        throw const LocationException(
-          type: LocationErrorType.timeout,
-          message: 'Gagal mendapatkan lokasi. '
-              'Pastikan Anda berada di area terbuka dan GPS aktif.',
-        );
-      }
-
       throw LocationException(
         type: LocationErrorType.unknown,
-        message: 'Gagal mengakses lokasi: $e',
+        message: 'Gagal mengambil lokasi: $e',
       );
     }
+
+    // ── Step 3: Validate position ──
+    final result = await GPSSecurityService.validatePosition(
+      position,
+      allowedAreas: allowedAreas,
+    );
+
+    // ── Step 4: Log & handle result ──
+    if (!result.isSafe) {
+      _logThreat(result);
+      throw LocationException(
+        type: _mapThreatToErrorType(result.threat),
+        message: result.message,
+        details: result.details,
+      );
+    }
+
+    // Log success
+    if (_employeeId != null) {
+      SecurityLogger.logGPSCheck(
+        employeeId: _employeeId!,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracy: position.accuracy,
+        isSafe: true,
+        message: 'Position acquired & validated',
+      );
+    }
+
+    return position;
   }
 
-  /// Buka pengaturan lokasi perangkat (untuk GPS off).
+  /// Buka settings lokasi device.
   static Future<bool> openLocationSettings() {
     return Geolocator.openLocationSettings();
   }
 
-  /// Buka pengaturan aplikasi (untuk permission denied forever).
+  /// Buka settings aplikasi.
   static Future<bool> openAppSettings() {
     return Geolocator.openAppSettings();
+  }
+
+  /// Reset security cache (panggil saat logout).
+  static void resetSecurityCache() {
+    GPSSecurityService.resetCache();
+    _employeeId = null;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // PRIVATE HELPERS
+  // ═══════════════════════════════════════════════════════
+
+  static LocationErrorType _mapThreatToErrorType(GPSSecurityThreat threat) {
+    switch (threat) {
+      case GPSSecurityThreat.mockLocationDetected:
+      case GPSSecurityThreat.mockAppInstalled:
+        return LocationErrorType.fakeGPSDetected;
+      case GPSSecurityThreat.deviceRooted:
+      case GPSSecurityThreat.emulatorDetected:
+      case GPSSecurityThreat.developerOptionsEnabled:
+        return LocationErrorType.deviceCompromised;
+      case GPSSecurityThreat.poorAccuracy:
+        return LocationErrorType.poorAccuracy;
+      case GPSSecurityThreat.unrealisticSpeed:
+      case GPSSecurityThreat.suspiciousJump:
+      case GPSSecurityThreat.outOfServiceArea:
+      case GPSSecurityThreat.invalidTimestamp:
+      case GPSSecurityThreat.inconsistentReadings:
+        return LocationErrorType.suspiciousActivity;
+      case GPSSecurityThreat.none:
+        return LocationErrorType.unknown;
+    }
+  }
+
+  static void _logThreat(GPSSecurityResult result) {
+    if (_employeeId == null) return;
+
+    debugPrint('[LocationService] THREAT: ${result.threat} — ${result.message}');
+
+    switch (result.threat) {
+      case GPSSecurityThreat.mockLocationDetected:
+      case GPSSecurityThreat.mockAppInstalled:
+      case GPSSecurityThreat.deviceRooted:
+      case GPSSecurityThreat.emulatorDetected:
+        SecurityLogger.logFakeGPSDetected(
+          employeeId: _employeeId!,
+          latitude: 0,
+          longitude: 0,
+          accuracy: 0,
+          message: result.message,
+          details: result.details,
+        );
+        break;
+      case GPSSecurityThreat.poorAccuracy:
+        SecurityLogger.logPoorAccuracy(
+          employeeId: _employeeId!,
+          latitude: 0,
+          longitude: 0,
+          accuracy: result.details['accuracy'] as double? ?? 0,
+          message: result.message,
+        );
+        break;
+      case GPSSecurityThreat.suspiciousJump:
+        SecurityLogger.logSuspiciousJump(
+          employeeId: _employeeId!,
+          latitude: 0,
+          longitude: 0,
+          accuracy: 0,
+          message: result.message,
+          details: result.details,
+        );
+        break;
+      case GPSSecurityThreat.unrealisticSpeed:
+        SecurityLogger.logUnrealisticSpeed(
+          employeeId: _employeeId!,
+          latitude: 0,
+          longitude: 0,
+          accuracy: 0,
+          message: result.message,
+          details: result.details,
+        );
+        break;
+      case GPSSecurityThreat.outOfServiceArea:
+        SecurityLogger.logOutOfServiceArea(
+          employeeId: _employeeId!,
+          latitude: 0,
+          longitude: 0,
+          accuracy: 0,
+          message: result.message,
+          details: result.details,
+        );
+        break;
+      default:
+        SecurityLogger.logGPSCheck(
+          employeeId: _employeeId!,
+          latitude: 0,
+          longitude: 0,
+          accuracy: 0,
+          isSafe: false,
+          message: result.message,
+          details: result.details,
+        );
+    }
   }
 }
