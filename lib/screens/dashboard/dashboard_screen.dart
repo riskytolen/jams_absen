@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/attendance_service.dart';
 import '../../core/services/attendance_realtime_service.dart';
+import '../../core/services/leave_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/strict_location_validator.dart';
 import '../../core/theme/app_colors.dart';
@@ -18,6 +19,7 @@ import '../attendance/attendance_history_screen.dart';
 import '../attendance/division_picker_sheet.dart';
 import '../attendance/face_verification_screen.dart';
 import '../leave/leave_screen.dart';
+import '../rekap_titik/rekap_titik_screen.dart';
 import '../login/login_screen.dart';
 import '../profile/profile_screen.dart';
 import 'widgets/dashboard_header.dart';
@@ -40,6 +42,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   AttendanceInfo? _attendanceInfo;
   late Pegawai _pegawai;
   late AttendanceRealtimeService _realtimeService;
+  int _pendingLeaveCount = 0;
 
   @override
   void initState() {
@@ -48,6 +51,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _realtimeService = AttendanceRealtimeService(employeeId: _pegawai.id);
     _checkTodayAttendance();
     _setupRealtimeListener();
+    _fetchPendingLeaveCount();
   }
 
   @override
@@ -146,6 +150,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Fetch jumlah permohonan cuti/izin/sakit yang masih pending.
+  Future<void> _fetchPendingLeaveCount() async {
+    final count = await LeaveService.getPendingCount(employeeId: _pegawai.id);
+    if (mounted) {
+      setState(() => _pendingLeaveCount = count);
+    }
+  }
+
   // ── Menu items (2 kolom grid, card per item) ────────────
   List<MenuItemModel> get _menuItems => [
         MenuItemModel(
@@ -160,7 +172,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           subtitle: 'Ajukan permohonan',
           icon: Icons.event_note_rounded,
           gradient: AppColors.orangeGradient,
-          badge: '2',
+          badge: _pendingLeaveCount > 0 ? '$_pendingLeaveCount' : null,
           onTap: () => _onMenuTap('Cuti & Izin'),
         ),
         MenuItemModel(
@@ -186,11 +198,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTap: () => _onMenuTap('Jadwal Kerja'),
         ),
         MenuItemModel(
-          title: 'Dokumen',
-          subtitle: 'File & surat',
-          icon: Icons.folder_rounded,
+          title: 'Rekap',
+          subtitle: 'Rekap titik',
+          icon: Icons.location_on_rounded,
           gradient: AppColors.cyanGradient,
-          onTap: () => _onMenuTap('Dokumen'),
+          onTap: () => _onMenuTap('Rekap Titik'),
         ),
         MenuItemModel(
           title: 'Profil',
@@ -273,6 +285,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => LeaveScreen(
+              employeeId: _pegawai.id,
+              employeeName: _pegawai.nama,
+            ),
+          ),
+        ).then((_) => _fetchPendingLeaveCount());
+        break;
+      case 'Rekap Titik':
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => RekapTitikScreen(
               employeeId: _pegawai.id,
               employeeName: _pegawai.nama,
             ),

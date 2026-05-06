@@ -86,6 +86,28 @@ abstract final class LeaveService {
     }
   }
 
+  /// Hitung jumlah permohonan yang masih berstatus 'Menunggu'.
+  ///
+  /// Digunakan untuk badge di menu dashboard.
+  static Future<int> getPendingCount({
+    required String employeeId,
+  }) async {
+    try {
+      await SupabaseService.ensureAuthenticated();
+
+      final response = await SupabaseService.client
+          .from('leave_requests')
+          .select('id')
+          .eq('employee_id', employeeId)
+          .eq('status', 'Menunggu');
+
+      return (response as List).length;
+    } catch (e) {
+      debugPrint('[LeaveService] getPendingCount error: $e');
+      return 0;
+    }
+  }
+
   /// Hitung detail sisa cuti dari database.
   ///
   /// Mengembalikan map:

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -816,6 +817,13 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
     super.dispose();
   }
 
+  void _removeAttachment() {
+    setState(() {
+      _lampiranPath = null;
+      _lampiranName = null;
+    });
+  }
+
   Future<void> _pickAttachment() async {
     // Gunakan image_picker untuk ambil foto bukti
     try {
@@ -986,7 +994,16 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
   }
 
   Future<void> _submit() async {
-    if (_tanggalMulai == null || _tanggalSelesai == null) {
+    DateTime? finalMulai = _tanggalMulai;
+    DateTime? finalSelesai = _tanggalSelesai;
+
+    if (_selectedJenis == 'Sakit') {
+      final now = DateTime.now();
+      finalMulai = now;
+      finalSelesai = now;
+    }
+
+    if (finalMulai == null || finalSelesai == null) {
       AppNotification.show(
         context,
         type: NotificationType.warning,
@@ -1035,8 +1052,8 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
       await LeaveService.submitLeaveRequest(
         employeeId: widget.employeeId,
         jenis: _selectedJenis,
-        tanggalMulai: _tanggalMulai!,
-        tanggalSelesai: _tanggalSelesai!,
+        tanggalMulai: finalMulai,
+        tanggalSelesai: finalSelesai,
         alasan: _alasanCtrl.text.trim().isEmpty ? null : _alasanCtrl.text.trim(),
         lampiranUrl: lampiranUrl,
       );
@@ -1070,28 +1087,35 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
       ),
       child: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Drag handle
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.textMuted.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(2),
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Ajukan Permohonan',
+                    style: AppTextStyles.h3.copyWith(fontSize: 16),
                   ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Title
-              Text(
-                'Ajukan Permohonan',
-                style: AppTextStyles.h3.copyWith(fontSize: 16),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceAlt,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 20),
 
@@ -1099,7 +1123,13 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
               Text('Jenis', style: AppTextStyles.label.copyWith(fontSize: 12)),
               const SizedBox(height: 8),
               Row(
-                children: ['Izin', 'Sakit', 'Cuti'].map((jenis) {
+                children: [
+                  {'label': 'Izin', 'icon': Icons.mail_rounded},
+                  {'label': 'Sakit', 'icon': Icons.local_hospital_rounded},
+                  {'label': 'Cuti', 'icon': Icons.beach_access_rounded},
+                ].map((item) {
+                  final jenis = item['label'] as String;
+                  final icon = item['icon'] as IconData;
                   final isSelected = _selectedJenis == jenis;
                   return Expanded(
                     child: GestureDetector(
@@ -1111,7 +1141,7 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? AppColors.primary.withValues(alpha: 0.1)
+                              ? AppColors.primary
                               : AppColors.surfaceAlt,
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
@@ -1121,19 +1151,30 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
                             width: isSelected ? 1.5 : 1,
                           ),
                         ),
-                        child: Center(
-                          child: Text(
-                            jenis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: isSelected
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              icon,
+                              size: 16,
                               color: isSelected
-                                  ? AppColors.primary
+                                  ? Colors.white
                                   : AppColors.textSecondary,
                             ),
-                          ),
+                            const SizedBox(width: 6),
+                            Text(
+                              jenis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -1142,27 +1183,64 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
               ),
               const SizedBox(height: 18),
 
-              // Date pickers
-              Row(
-                children: [
-                  Expanded(
-                    child: _DateField(
-                      label: 'Mulai',
-                      date: _tanggalMulai,
-                      onTap: () => _pickDate(isStart: true),
+              // Date pickers (Sembunyikan jika 'Sakit')
+              if (_selectedJenis != 'Sakit') ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DateField(
+                        label: 'Mulai',
+                        date: _tanggalMulai,
+                        onTap: () => _pickDate(isStart: true),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _DateField(
+                        label: 'Selesai',
+                        date: _tanggalSelesai,
+                        onTap: () => _pickDate(isStart: false),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+              ] else ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDC2626).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFFDC2626).withValues(alpha: 0.2),
+                      width: 1,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _DateField(
-                      label: 'Selesai',
-                      date: _tanggalSelesai,
-                      onTap: () => _pickDate(isStart: false),
-                    ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        color: Color(0xFFDC2626),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Pengajuan sakit berlaku untuk 1 hari (hari ini). Jika besok masih sakit, harap ajukan kembali.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: const Color(0xFFDC2626),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 18),
+                ),
+                const SizedBox(height: 18),
+              ],
 
               // Alasan
               Text(
@@ -1178,6 +1256,7 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
                   fontSize: 13,
                 ),
                 decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.edit_note_rounded, size: 20, color: AppColors.textMuted),
                   hintText: _selectedJenis == 'Sakit'
                       ? 'Jelaskan keluhan / diagnosa...'
                       : 'Tulis alasan permohonan...',
@@ -1230,38 +1309,27 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
                 const SizedBox(height: 8),
                 GestureDetector(
                   onTap: _pickAttachment,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: _lampiranPath != null
-                          ? AppColors.success.withValues(alpha: 0.05)
-                          : AppColors.surfaceAlt,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: _lampiranPath != null
-                            ? AppColors.success.withValues(alpha: 0.3)
-                            : AppColors.border,
-                        width: 1,
-                      ),
-                    ),
-                    child: _lampiranPath != null
-                        ? Row(
+                  child: _lampiranPath != null
+                      ? Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceAlt,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border, width: 1),
+                          ),
+                          child: Row(
                             children: [
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: AppColors.success.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Icon(
-                                  Icons.image_rounded,
-                                  color: AppColors.success,
-                                  size: 18,
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(
+                                  File(_lampiranPath!),
+                                  width: 44,
+                                  height: 44,
+                                  fit: BoxFit.cover,
                                 ),
                               ),
-                              const SizedBox(width: 10),
+                              const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1269,97 +1337,136 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
                                     Text(
                                       _lampiranName ?? 'Foto bukti',
                                       style: TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 13,
                                         fontWeight: FontWeight.w600,
                                         color: AppColors.textDark,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                    const Text(
-                                      'Tap untuk ganti',
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Tap untuk mengganti file',
                                       style: TextStyle(
-                                        fontSize: 10,
-                                        color: AppColors.textMuted,
+                                        fontSize: 11,
+                                        color: AppColors.textSecondary,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                              const Icon(
-                                Icons.check_circle_rounded,
-                                color: AppColors.success,
-                                size: 20,
-                              ),
-                            ],
-                          )
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.cloud_upload_rounded,
-                                color: AppColors.textMuted,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _selectedJenis == 'Sakit'
-                                    ? 'Upload surat dokter / foto bukti'
-                                    : 'Upload bukti pendukung izin',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.textMuted,
+                              GestureDetector(
+                                onTap: _removeAttachment,
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.errorBg,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    color: AppColors.error,
+                                    size: 18,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    _selectedJenis == 'Sakit'
-                        ? 'Surat dokter atau foto resep obat (maks 500KB)'
-                        : 'Foto surat izin atau bukti pendukung (maks 500KB)',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: AppColors.textMuted,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
+                        )
+                      : DottedBorder(
+                          options: RoundedRectDottedBorderOptions(
+                            radius: const Radius.circular(12),
+                            color: AppColors.primary,
+                            strokeWidth: 1.5,
+                            dashPattern: const [6, 4],
+                            padding: const EdgeInsets.all(16),
+                          ),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary50,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.cloud_upload_rounded,
+                                    color: AppColors.primary,
+                                    size: 24,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  _selectedJenis == 'Sakit'
+                                      ? 'Tap untuk upload surat dokter / bukti'
+                                      : 'Tap untuk upload bukti pendukung',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Maks 500KB (JPG/PNG)',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                 ),
                 const SizedBox(height: 18),
               ],
               const SizedBox(height: 6),
 
               // Submit button
-              SizedBox(
+              Container(
                 width: double.infinity,
                 height: 48,
-                child: ElevatedButton(
-                  onPressed: _isSubmitting ? null : _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
                     ),
-                    elevation: 0,
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _isSubmitting ? null : _submit,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Center(
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              'Ajukan Permohonan',
+                              style: AppTextStyles.button.copyWith(
+                                fontSize: 14,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                    ),
                   ),
-                  child: _isSubmitting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Text(
-                          'Ajukan Permohonan',
-                          style: AppTextStyles.button.copyWith(fontSize: 14),
-                        ),
                 ),
               ),
               const SizedBox(height: 8),
