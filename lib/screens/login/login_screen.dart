@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/sound_service.dart';
@@ -27,6 +28,7 @@ class _LoginScreenState extends State<LoginScreen>
   // ── State ──
   bool _isLoading = false;
   String? _loadingMessage;
+  String _appVersion = '';
 
   // ── Entrance animations ──
   late final AnimationController _fadeCtrl;
@@ -75,6 +77,12 @@ class _LoginScreenState extends State<LoginScreen>
 
     _fadeCtrl.forward();
     _slideCtrl.forward();
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) setState(() => _appVersion = info.version);
   }
 
   @override
@@ -421,15 +429,13 @@ class _LoginScreenState extends State<LoginScreen>
             borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
             boxShadow: AppShadows.elevated,
           ),
-          child: Center(
-            child: ShaderMask(
-              shaderCallback: (bounds) =>
-                  AppColors.primaryGradient.createShader(bounds),
-              child: const Icon(
-                Icons.face_retouching_natural_rounded,
-                size: 44,
-                color: Colors.white,
-              ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+            child: Image.asset(
+              'assets/logo.png',
+              width: 56,
+              height: 56,
+              fit: BoxFit.cover,
             ),
           ),
         ),
@@ -649,7 +655,7 @@ class _LoginScreenState extends State<LoginScreen>
     return Column(
       children: [
         Text(
-          'Jams Attendance v1.0.0',
+          'Jams Attendance v$_appVersion',
           style: AppTextStyles.onDarkMuted.copyWith(
             color: Colors.white.withValues(alpha: 0.35),
             fontSize: 12,

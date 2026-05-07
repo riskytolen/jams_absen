@@ -22,26 +22,45 @@ class AttendanceHistoryScreen extends StatefulWidget {
 }
 
 class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
-  late int _selectedMonth;
-  late int _selectedYear;
+  late DateTime _periodStart;
+  late DateTime _periodEnd;
   List<Map<String, dynamic>> _records = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _selectedMonth = now.month;
-    _selectedYear = now.year;
+    _initPeriod();
     _loadData();
+  }
+
+  /// Hitung periode aktif: tanggal 8 — tanggal 7 bulan berikutnya.
+  void _initPeriod() {
+    final now = DateTime.now();
+    if (now.day >= 8) {
+      _periodStart = DateTime(now.year, now.month, 8);
+      _periodEnd = DateTime(now.year, now.month + 1, 7);
+    } else {
+      _periodStart = DateTime(now.year, now.month - 1, 8);
+      _periodEnd = DateTime(now.year, now.month, 7);
+    }
+  }
+
+  String _formatDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String get _periodLabel {
+    final startLabel = DateFormat('dd MMM', 'id_ID').format(_periodStart);
+    final endLabel = DateFormat('dd MMM yyyy', 'id_ID').format(_periodEnd);
+    return '$startLabel — $endLabel';
   }
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final data = await AttendanceService.getAttendanceHistory(
       employeeId: widget.employeeId,
-      month: _selectedMonth,
-      year: _selectedYear,
+      startDate: _formatDate(_periodStart),
+      endDate: _formatDate(_periodEnd),
     );
     if (mounted) {
       setState(() {
@@ -51,17 +70,11 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     }
   }
 
-  void _changeMonth(int delta) {
+  void _changePeriod(int delta) {
     HapticFeedback.selectionClick();
     setState(() {
-      _selectedMonth += delta;
-      if (_selectedMonth > 12) {
-        _selectedMonth = 1;
-        _selectedYear++;
-      } else if (_selectedMonth < 1) {
-        _selectedMonth = 12;
-        _selectedYear--;
-      }
+      _periodStart = DateTime(_periodStart.year, _periodStart.month + delta, 8);
+      _periodEnd = DateTime(_periodStart.year, _periodStart.month + 1, 7);
     });
     _loadData();
   }
@@ -89,16 +102,15 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
             // ── Header ──
             _Header(
               employeeName: widget.employeeName,
-              month: _selectedMonth,
-              year: _selectedYear,
+              periodLabel: _periodLabel,
               totalHadir: _totalHadir,
               totalTelat: _totalTelat,
               totalIzin: _totalIzin,
               totalAlpha: _totalAlpha,
               totalRecords: _records.length,
               onBack: () => Navigator.of(context).pop(),
-              onPrevMonth: () => _changeMonth(-1),
-              onNextMonth: () => _changeMonth(1),
+              onPrevMonth: () => _changePeriod(-1),
+              onNextMonth: () => _changePeriod(1),
             ),
 
             // ── List ──
@@ -203,8 +215,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
 // ═════════════════════════════════════════════════════════
 class _Header extends StatelessWidget {
   final String employeeName;
-  final int month;
-  final int year;
+  final String periodLabel;
   final int totalHadir;
   final int totalTelat;
   final int totalIzin;
@@ -216,8 +227,7 @@ class _Header extends StatelessWidget {
 
   const _Header({
     required this.employeeName,
-    required this.month,
-    required this.year,
+    required this.periodLabel,
     required this.totalHadir,
     required this.totalTelat,
     required this.totalIzin,
@@ -230,8 +240,6 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final monthName = DateFormat('MMMM yyyy', 'id_ID')
-        .format(DateTime(year, month));
 
     return Container(
       decoration: const BoxDecoration(
@@ -259,7 +267,7 @@ class _Header extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Riwayat Absensi',
+                          'Riwayat Kehadiran',
                           style: AppTextStyles.onDarkTitle.copyWith(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -303,10 +311,10 @@ class _Header extends StatelessWidget {
                     ),
                     Expanded(
                       child: Text(
-                        monthName,
+                        periodLabel,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 15,
+                        style: const TextStyle(
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
@@ -462,6 +470,7 @@ class _TimelineItem extends StatelessWidget {
     final scheduleJamMasuk = record['schedule_jam_masuk'] as String?;
     final scheduleTime = scheduleJamMasuk?.substring(0, 5);
 
+    final alasanManual = record['alasan_manual'] as String?;
     final isPresent = status == 'Hadir' || status == 'Terlambat';
 
     final Color statusColor;
@@ -652,78 +661,123 @@ class _TimelineItem extends StatelessWidget {
                     ),
                   ),
 
-                  // Bottom detail row
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceAlt.withValues(alpha: 0.5),
-                      borderRadius: const BorderRadius.vertical(
-                        bottom: Radius.circular(14),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        // Division
-                        Icon(
-                          Icons.location_on_rounded,
-                          size: 12,
-                          color: AppColors.textMuted,
+                  // Alasan manual (dari admin web)
+                  if (alasanManual != null && alasanManual.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
                         ),
-                        const SizedBox(width: 3),
-                        Text(
-                          divisionName,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
-                            fontWeight: FontWeight.w500,
+                        decoration: BoxDecoration(
+                          color: AppColors.infoBg,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: AppColors.info.withValues(alpha: 0.15),
+                            width: 1,
                           ),
                         ),
-                        // Schedule
-                        if (scheduleTime != null) ...[
-                          const SizedBox(width: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.admin_panel_settings_rounded,
+                              size: 13,
+                              color: AppColors.info,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                alasanManual,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.info,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // Bottom detail row (hanya untuk Hadir/Terlambat)
+                  if (isPresent)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceAlt.withValues(alpha: 0.5),
+                        borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(14),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          // Division
                           Icon(
-                            Icons.schedule_rounded,
+                            Icons.location_on_rounded,
                             size: 12,
                             color: AppColors.textMuted,
                           ),
                           const SizedBox(width: 3),
                           Text(
-                            'Jadwal $scheduleTime',
+                            divisionName,
                             style: TextStyle(
                               fontSize: 11,
                               color: AppColors.textSecondary,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                        ],
-                        const Spacer(),
-                        // Denda
-                        if (denda > 0)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
+                          // Schedule
+                          if (scheduleTime != null) ...[
+                            const SizedBox(width: 10),
+                            Icon(
+                              Icons.schedule_rounded,
+                              size: 12,
+                              color: AppColors.textMuted,
                             ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFDC2626).withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '-Rp ${_formatCurrency(denda)}',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFFDC2626),
+                            const SizedBox(width: 3),
+                            Text(
+                              'Jadwal $scheduleTime',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
-                          ),
-                      ],
+                          ],
+                          const Spacer(),
+                          // Denda
+                          if (denda > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDC2626).withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '-Rp ${_formatCurrency(denda)}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFDC2626),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

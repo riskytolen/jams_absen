@@ -3,32 +3,25 @@ import 'supabase_service.dart';
 
 /// Service untuk mengelola data rekap titik pengiriman (delivery points).
 abstract final class DeliveryPointService {
-  /// Ambil semua delivery points untuk pegawai.
+  /// Ambil semua delivery points untuk pegawai dalam periode tertentu.
   ///
   /// Diurutkan dari tanggal terbaru.
-  /// Bisa difilter berdasarkan bulan/tahun.
   static Future<List<Map<String, dynamic>>> getDeliveryPoints({
     required String employeeId,
-    int? month,
-    int? year,
+    required String startDate,
+    required String endDate,
   }) async {
     try {
       await SupabaseService.ensureAuthenticated();
 
-      var query = SupabaseService.client
+      final response = await SupabaseService.client
           .from('delivery_points')
           .select('*, divisions(nama, color)')
-          .eq('employee_id', employeeId);
+          .eq('employee_id', employeeId)
+          .gte('tanggal', startDate)
+          .lte('tanggal', endDate)
+          .order('tanggal', ascending: false);
 
-      if (month != null && year != null) {
-        final startDate = '$year-${month.toString().padLeft(2, '0')}-01';
-        final endMonth = month == 12 ? 1 : month + 1;
-        final endYear = month == 12 ? year + 1 : year;
-        final endDate = '$endYear-${endMonth.toString().padLeft(2, '0')}-01';
-        query = query.gte('tanggal', startDate).lt('tanggal', endDate);
-      }
-
-      final response = await query.order('tanggal', ascending: false);
       return List<Map<String, dynamic>>.from(response as List);
     } catch (e) {
       debugPrint('[DeliveryPointService] getDeliveryPoints error: $e');
@@ -36,32 +29,27 @@ abstract final class DeliveryPointService {
     }
   }
 
-  /// Hitung ringkasan rekap titik untuk bulan tertentu.
+  /// Hitung ringkasan rekap titik untuk periode tertentu.
   ///
   /// Mengembalikan map:
   /// - `totalTitik`: total jumlah titik
   /// - `totalPendapatan`: total rupiah dari titik
   /// - `totalHari`: jumlah hari kerja (distinct tanggal)
   /// - `rataPerHari`: rata-rata titik per hari
-  static Future<Map<String, dynamic>> getMonthlySummary({
+  static Future<Map<String, dynamic>> getPeriodSummary({
     required String employeeId,
-    required int month,
-    required int year,
+    required String startDate,
+    required String endDate,
   }) async {
     try {
       await SupabaseService.ensureAuthenticated();
-
-      final startDate = '$year-${month.toString().padLeft(2, '0')}-01';
-      final endMonth = month == 12 ? 1 : month + 1;
-      final endYear = month == 12 ? year + 1 : year;
-      final endDate = '$endYear-${endMonth.toString().padLeft(2, '0')}-01';
 
       final response = await SupabaseService.client
           .from('delivery_points')
           .select('tanggal, jumlah_titik, total')
           .eq('employee_id', employeeId)
           .gte('tanggal', startDate)
-          .lt('tanggal', endDate);
+          .lte('tanggal', endDate);
 
       final data = List<Map<String, dynamic>>.from(response as List);
 
@@ -85,7 +73,7 @@ abstract final class DeliveryPointService {
         'rataPerHari': rataPerHari,
       };
     } catch (e) {
-      debugPrint('[DeliveryPointService] getMonthlySummary error: $e');
+      debugPrint('[DeliveryPointService] getPeriodSummary error: $e');
       return {
         'totalTitik': 0,
         'totalPendapatan': 0,

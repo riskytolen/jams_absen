@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../core/services/attendance_service.dart';
 import '../../core/services/leave_service.dart';
 import '../../widgets/common/app_notification.dart';
 
@@ -87,6 +88,8 @@ class _LeaveScreenState extends State<LeaveScreen>
       backgroundColor: Colors.transparent,
       builder: (_) => _LeaveFormSheet(
         employeeId: widget.employeeId,
+        maksPerPengajuan: _leaveBalance['maksPerPengajuan'] ?? 3,
+        sisaCuti: _leaveBalance['remaining'] ?? 12,
         onSubmitted: () {
           _loadData();
           if (mounted) {
@@ -380,6 +383,7 @@ class _LeaveCard extends StatelessWidget {
     final tanggalMulai = DateTime.parse(request['tanggal_mulai'] as String);
     final tanggalSelesai = DateTime.parse(request['tanggal_selesai'] as String);
     final alasan = request['alasan'] as String?;
+    final catatanApproval = request['catatan_approval'] as String?;
     final createdAt = DateTime.parse(request['created_at'] as String);
     final approvedAt = request['approved_at'] != null
         ? DateTime.parse(request['approved_at'] as String)
@@ -465,7 +469,62 @@ class _LeaveCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (status == 'Menunggu')
+                // Badge status
+                if (status == 'Disetujui')
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: AppColors.success.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle_rounded, size: 12, color: AppColors.success),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Disetujui',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.success,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (status == 'Ditolak')
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: AppColors.error.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.cancel_rounded, size: 12, color: AppColors.error),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Ditolak',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (status == 'Menunggu')
                   GestureDetector(
                     onTap: () {
                       HapticFeedback.lightImpact();
@@ -520,6 +579,77 @@ class _LeaveCard extends StatelessWidget {
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // ── Catatan Approval (dari admin) ──
+          if (catatanApproval != null && catatanApproval.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: status == 'Disetujui'
+                      ? AppColors.successBg
+                      : status == 'Ditolak'
+                          ? AppColors.errorBg
+                          : AppColors.infoBg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: status == 'Disetujui'
+                        ? AppColors.success.withValues(alpha: 0.2)
+                        : status == 'Ditolak'
+                            ? AppColors.error.withValues(alpha: 0.2)
+                            : AppColors.info.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.admin_panel_settings_rounded,
+                      size: 14,
+                      color: status == 'Disetujui'
+                          ? AppColors.success
+                          : status == 'Ditolak'
+                              ? AppColors.error
+                              : AppColors.info,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Catatan HRD',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: status == 'Disetujui'
+                                  ? AppColors.success
+                                  : status == 'Ditolak'
+                                      ? AppColors.error
+                                      : AppColors.info,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            catatanApproval,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textSecondary,
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -788,10 +918,14 @@ class _TimelineConnector extends StatelessWidget {
 // ═════════════════════════════════════════════════════════
 class _LeaveFormSheet extends StatefulWidget {
   final String employeeId;
+  final int maksPerPengajuan;
+  final int sisaCuti;
   final VoidCallback onSubmitted;
 
   const _LeaveFormSheet({
     required this.employeeId,
+    required this.maksPerPengajuan,
+    required this.sisaCuti,
     required this.onSubmitted,
   });
 
@@ -1011,6 +1145,52 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
         message: 'Pilih tanggal mulai dan selesai',
       );
       return;
+    }
+
+    // Validasi: jika tanggal mulai = hari ini, cek apakah sudah absen
+    final today = DateTime.now();
+    final isStartToday = finalMulai.year == today.year &&
+        finalMulai.month == today.month &&
+        finalMulai.day == today.day;
+
+    if (isStartToday) {
+      final hasCheckedIn = await AttendanceService.hasAnyRecordToday(
+        widget.employeeId,
+      );
+      if (hasCheckedIn && mounted) {
+        AppNotification.show(
+          context,
+          type: NotificationType.warning,
+          title: 'Tidak Dapat Diajukan',
+          message: 'Anda sudah absen hari ini. Pengajuan untuk hari ini tidak diperbolehkan.',
+        );
+        return;
+      }
+    }
+
+    // Validasi khusus Cuti: maks hari per pengajuan & sisa kuota
+    if (_selectedJenis == 'Cuti') {
+      final durasi = finalSelesai.difference(finalMulai).inDays + 1;
+
+      if (durasi > widget.maksPerPengajuan) {
+        AppNotification.show(
+          context,
+          type: NotificationType.warning,
+          title: 'Melebihi Batas',
+          message: 'Maksimal ${widget.maksPerPengajuan} hari per pengajuan cuti',
+        );
+        return;
+      }
+
+      if (durasi > widget.sisaCuti) {
+        AppNotification.show(
+          context,
+          type: NotificationType.warning,
+          title: 'Kuota Tidak Cukup',
+          message: 'Sisa cuti Anda hanya ${widget.sisaCuti} hari',
+        );
+        return;
+      }
     }
 
     // Validasi: Izin & Sakit wajib lampiran bukti

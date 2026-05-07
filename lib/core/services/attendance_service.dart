@@ -322,6 +322,31 @@ abstract final class AttendanceService {
     }
   }
 
+  /// Cek apakah pegawai sudah punya record absensi hari ini (tanpa filter divisi).
+  ///
+  /// Digunakan untuk validasi pengajuan izin/sakit/cuti.
+  static Future<bool> hasAnyRecordToday(String employeeId) async {
+    try {
+      await SupabaseService.ensureAuthenticated();
+
+      final today = DateTime.now();
+      final tanggal =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+      final response = await SupabaseService.client
+          .from('attendance_records')
+          .select('id')
+          .eq('employee_id', employeeId)
+          .eq('tanggal', tanggal)
+          .maybeSingle();
+
+      return response != null;
+    } catch (e) {
+      debugPrint('[AttendanceService] hasCheckedInToday (no div) error: $e');
+      return false;
+    }
+  }
+
   // ── Hitung Status Kehadiran ─────────────────────────────────────────────
 
   /// Hitung status kehadiran berdasarkan jam masuk dan jadwal.
@@ -500,20 +525,11 @@ abstract final class AttendanceService {
   /// Jika tidak diisi, ambil bulan ini.
   static Future<List<Map<String, dynamic>>> getAttendanceHistory({
     required String employeeId,
-    int? month,
-    int? year,
+    required String startDate,
+    required String endDate,
   }) async {
     try {
       await SupabaseService.ensureAuthenticated();
-
-      final now = DateTime.now();
-      final m = month ?? now.month;
-      final y = year ?? now.year;
-
-      // Range tanggal bulan tersebut
-      final startDate = '$y-${m.toString().padLeft(2, '0')}-01';
-      final lastDay = DateTime(y, m + 1, 0).day;
-      final endDate = '$y-${m.toString().padLeft(2, '0')}-${lastDay.toString().padLeft(2, '0')}';
 
       final response = await SupabaseService.client
           .from('attendance_records')
@@ -526,6 +542,105 @@ abstract final class AttendanceService {
       return List<Map<String, dynamic>>.from(response as List);
     } catch (e) {
       debugPrint('[AttendanceService] getAttendanceHistory error: $e');
+      return [];
+    }
+  }
+
+  // ── Statistik Kehadiran ─────────────────────────────────────────────
+
+  /// Hitung statistik kehadiran untuk periode tertentu.
+  ///
+  /// Mengembalikan map:
+  /// - `hadir`: jumlah hari hadir (tepat waktu)
+  /// - `terlambat`: jumlah hari terlambat
+  /// - `izin`: jumlah hari izin/sakit/cuti
+  /// - `alpha`: jumlah hari alpha
+  /// - `libur`: jumlah hari libur
+  /// - `totalRecords`: total record
+  static Future<Map<String, int>> getAttendanceStats({
+    required String employeeId,
+    required String startDate,
+    required String endDate,
+  }) async {
+    try {
+      await SupabaseService.ensureAuthenticated();
+
+      final response = await SupabaseService.client
+          .from('attendance_records')
+          .select('status')
+          .eq('employee_id', employeeId)
+          .gte('tanggal', startDate)
+          .lte('tanggal', endDate);
+
+      final data = List<Map<String, dynamic>>.from(response as List);
+
+      int hadir = 0;
+      int terlambat = 0;
+      int izin = 0;
+      int alpha = 0;
+      int libur = 0;
+
+      for (final row in data) {
+        switch (row['status'] as String) {
+          case 'Hadir':
+            hadir++;
+            break;
+          case 'Terlambat':
+            terlambat++;
+            break;
+          case 'Izin':
+          case 'Sakit':
+          case 'Cuti':
+            izin++;
+            break;
+          case 'Alpha':
+            alpha++;
+            break;
+          case 'Libur':
+            libur++;
+            break;
+        }
+      }
+
+      return {
+        'hadir': hadir,
+        'terlambat': terlambat,
+        'izin': izin,
+        'alpha': alpha,
+        'libur': libur,
+        'totalRecords': data.length,
+      };
+    } catch (e) {
+      debugPrint('[AttendanceService] getAttendanceStats error: $e');
+      return {
+        'hadir': 0,
+        'terlambat': 0,
+        'izin': 0,
+        'alpha': 0,
+        'libur': 0,
+        'totalRecords': 0,
+      };
+    }
+  }
+
+  /// Ambil aktivitas terbaru (5 record terakhir).
+  static Future<List<Map<String, dynamic>>> getRecentActivity({
+    required String employeeId,
+    int limit = 5,
+  }) async {
+    try {
+      await SupabaseService.ensureAuthenticated();
+
+      final response = await SupabaseService.client
+          .from('attendance_records')
+          .select('tanggal, jam_masuk, status, durasi_telat, divisions:division_id(nama)')
+          .eq('employee_id', employeeId)
+          .order('tanggal', ascending: false)
+          .limit(limit);
+
+      return List<Map<String, dynamic>>.from(response as List);
+    } catch (e) {
+      debugPrint('[AttendanceService] getRecentActivity error: $e');
       return [];
     }
   }

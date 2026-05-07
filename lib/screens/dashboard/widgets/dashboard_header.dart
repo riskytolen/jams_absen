@@ -25,6 +25,10 @@ class AttendanceInfo {
   });
 
   bool get isLate => status == 'Terlambat';
+  bool get isPresent => status == 'Hadir' || status == 'Terlambat';
+  bool get isLeave => status == 'Izin' || status == 'Sakit' || status == 'Cuti';
+  bool get isAlpha => status == 'Alpha';
+  bool get isLibur => status == 'Libur';
 
   /// Batas waktu telat = jadwal + toleransi.
   String? get batasTelatTime {
@@ -152,21 +156,13 @@ class _CompanyBar extends StatelessWidget {
     return Row(
       children: [
         // Logo
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF2563EB), Color(0xFF60A5FA)],
-            ),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Icon(
-            Icons.local_shipping_rounded,
-            color: Colors.white,
-            size: 17,
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.asset(
+            'assets/logo.png',
+            width: 30,
+            height: 30,
+            fit: BoxFit.cover,
           ),
         ),
         const SizedBox(width: 10),
@@ -373,8 +369,8 @@ class _MainCardState extends State<_MainCard> {
                           ),
                           const SizedBox(width: 6),
                           _InfoPill(
-                            icon: Icons.schedule_rounded,
-                            text: 'Jadwal 08:00',
+                            icon: Icons.badge_rounded,
+                            text: widget.department,
                           ),
                         ],
                       ),
@@ -536,26 +532,61 @@ class _StatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLate = info.isLate;
-
     final Color bgColor;
     final Color lightColor;
     final IconData icon;
     final String label;
     final String desc;
 
-    if (isLate) {
-      bgColor = const Color(0xFFDC2626);
-      lightColor = const Color(0xFFFEE2E2);
-      icon = Icons.warning_rounded;
-      label = 'TERLAMBAT';
-      desc = '+${info.durasiTelat} menit dari jadwal';
-    } else {
-      bgColor = const Color(0xFF059669);
-      lightColor = const Color(0xFFD1FAE5);
-      icon = Icons.check_circle_rounded;
-      label = 'TEPAT WAKTU';
-      desc = 'Absensi tercatat dengan baik';
+    switch (info.status) {
+      case 'Terlambat':
+        bgColor = const Color(0xFFDC2626);
+        lightColor = const Color(0xFFFEE2E2);
+        icon = Icons.warning_rounded;
+        label = 'TERLAMBAT';
+        desc = '+${info.durasiTelat} menit dari jadwal';
+        break;
+      case 'Izin':
+        bgColor = const Color(0xFFD97706);
+        lightColor = const Color(0xFFFEF3C7);
+        icon = Icons.mail_rounded;
+        label = 'IZIN';
+        desc = 'Anda sedang izin hari ini';
+        break;
+      case 'Sakit':
+        bgColor = const Color(0xFFDC2626);
+        lightColor = const Color(0xFFFEE2E2);
+        icon = Icons.local_hospital_rounded;
+        label = 'SAKIT';
+        desc = 'Semoga lekas sembuh';
+        break;
+      case 'Cuti':
+        bgColor = const Color(0xFF0891B2);
+        lightColor = const Color(0xFFCFFAFE);
+        icon = Icons.beach_access_rounded;
+        label = 'CUTI';
+        desc = 'Anda sedang cuti hari ini';
+        break;
+      case 'Alpha':
+        bgColor = const Color(0xFF7C3AED);
+        lightColor = const Color(0xFFEDE9FE);
+        icon = Icons.cancel_rounded;
+        label = 'ALPHA';
+        desc = 'Tidak hadir tanpa keterangan';
+        break;
+      case 'Libur':
+        bgColor = const Color(0xFF6366F1);
+        lightColor = const Color(0xFFE0E7FF);
+        icon = Icons.event_busy_rounded;
+        label = 'HARI LIBUR';
+        desc = 'Hari ini adalah hari libur Anda';
+        break;
+      default: // 'Hadir'
+        bgColor = const Color(0xFF059669);
+        lightColor = const Color(0xFFD1FAE5);
+        icon = Icons.check_circle_rounded;
+        label = 'TEPAT WAKTU';
+        desc = 'Absensi tercatat dengan baik';
     }
 
     return Container(
@@ -623,56 +654,74 @@ class _StatusCard extends StatelessWidget {
                   ),
                 ),
 
-                // Clock-in time
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    info.clockInTime,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      fontFeatures: [FontFeature.tabularFigures()],
+                // Clock-in time (hanya untuk Hadir/Terlambat)
+                if (info.isPresent)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      info.clockInTime,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Hari Ini',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
 
-          // ── Detail footer ──
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.12),
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(14),
+          // ── Detail footer (hanya untuk Hadir/Terlambat) ──
+          if (info.isPresent)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.12),
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(14),
+                ),
               ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.location_on_rounded,
-                  color: lightColor.withValues(alpha: 0.85),
-                  size: 14,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  info.divisionName,
-                  style: TextStyle(
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.location_on_rounded,
                     color: lightColor.withValues(alpha: 0.85),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    size: 14,
                   ),
-                ),
-                const Spacer(),
-                // Jadwal & batas telat
-                if (info.scheduleTime != null) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    info.divisionName,
+                    style: TextStyle(
+                      color: lightColor.withValues(alpha: 0.85),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  // Jadwal & batas telat
+                  if (info.scheduleTime != null) ...[
                   Icon(
                     Icons.schedule_rounded,
                     color: lightColor.withValues(alpha: 0.7),

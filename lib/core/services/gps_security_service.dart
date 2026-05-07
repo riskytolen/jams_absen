@@ -114,7 +114,7 @@ class DeviceSecurityStatus {
 /// Layer 6: Geofence validation (area kerja)
 abstract final class GPSSecurityService {
   // ── Thresholds ──
-  static const double maxAccuracyMeters = 25.0;
+  static const double maxAccuracyMeters = 50.0;
   static const double maxSpeedKmh = 120.0;
   static const double _maxSpeedMs = maxSpeedKmh / 3.6;
   static const double suspiciousJumpMeters = 500.0;

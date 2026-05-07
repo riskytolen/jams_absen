@@ -51,7 +51,7 @@ class StrictLocationValidation {
 /// Semua check di-log ke SecurityLogger untuk audit trail.
 abstract final class StrictLocationValidator {
   // ── Strict thresholds (lebih ketat dari GPSSecurityService) ──
-  static const double _maxAccuracy = 20.0; // meter
+  static const double _maxAccuracy = 50.0; // meter
   static const int _maxTimestampDrift = 30; // detik
   static const double _maxSpeedKmh = 80.0; // km/h
   static const double _suspiciousJumpMeters = 300.0; // meter
@@ -72,12 +72,13 @@ abstract final class StrictLocationValidator {
   ///
   /// Ini adalah method utama — menjalankan SEMUA layer validasi.
   /// Harus dipanggil SETELAH LocationService.getCurrentPosition() berhasil.
+  ///
+  /// [locations] adalah list lokasi valid untuk divisi ini.
+  /// User dianggap valid jika berada di salah satu lokasi.
   static Future<StrictLocationValidation> validateLocationForDivision({
     required Position position,
     required int divisionId,
-    required double divisionLatitude,
-    required double divisionLongitude,
-    required double divisionRadius,
+    required List<Map<String, dynamic>> locations,
     required String employeeId,
   }) async {
     try {
@@ -210,36 +211,58 @@ abstract final class StrictLocationValidator {
         }
       }
 
-      // ── Layer 7: Division geofence ──
-      final distanceToDivision = Geolocator.distanceBetween(
-        position.latitude,
-        position.longitude,
-        divisionLatitude,
-        divisionLongitude,
-      );
+      // ── Layer 7: Division geofence (multi-location) ──
+      // Cek apakah user berada di salah satu lokasi valid
+      bool isInsideAnyLocation = false;
+      double nearestDistance = double.infinity;
+      double nearestRadius = 0;
 
-      if (distanceToDivision > divisionRadius) {
+      for (final loc in locations) {
+        final locLat = (loc['latitude'] as num).toDouble();
+        final locLng = (loc['longitude'] as num).toDouble();
+        final locRadius = (loc['radius'] as num).toDouble();
+
+        final distance = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          locLat,
+          locLng,
+        );
+
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestRadius = locRadius;
+        }
+
+        if (distance <= locRadius) {
+          isInsideAnyLocation = true;
+          break;
+        }
+      }
+
+      if (!isInsideAnyLocation) {
         await SecurityLogger.logOutOfServiceArea(
           employeeId: employeeId,
           latitude: position.latitude,
           longitude: position.longitude,
           accuracy: position.accuracy,
-          message: 'Jarak ke divisi: ${distanceToDivision.toStringAsFixed(0)}m '
-              '(max: ${divisionRadius.toStringAsFixed(0)}m)',
+          message: 'Jarak ke lokasi terdekat: ${nearestDistance.toStringAsFixed(0)}m '
+              '(max: ${nearestRadius.toStringAsFixed(0)}m)',
           details: {
-            'distanceToDivision': distanceToDivision,
-            'divisionRadius': divisionRadius,
+            'distanceToDivision': nearestDistance,
+            'divisionRadius': nearestRadius,
             'divisionId': divisionId,
+            'locationsChecked': locations.length,
           },
         );
         return StrictLocationValidation(
           isValid: false,
           message: 'Anda berada di luar area divisi '
-              '(${distanceToDivision.toStringAsFixed(0)}m dari lokasi)',
+              '(${nearestDistance.toStringAsFixed(0)}m dari lokasi terdekat)',
           threat: GPSSecurityThreat.outOfServiceArea,
           details: {
-            'distance': distanceToDivision,
-            'radius': divisionRadius,
+            'distance': nearestDistance,
+            'radius': nearestRadius,
           },
         );
       }
@@ -284,8 +307,9 @@ abstract final class StrictLocationValidator {
         isSafe: true,
         message: 'Validasi ketat berhasil — divisi $divisionId',
         details: {
-          'distanceToDivision': distanceToDivision,
-          'divisionRadius': divisionRadius,
+          'distanceToNearest': nearestDistance,
+          'nearestRadius': nearestRadius,
+          'locationsChecked': locations.length,
           'accuracy': position.accuracy,
           'multiSamplePassed': true,
           'deviceSecure': true,

@@ -74,52 +74,55 @@ class _DivisionPickerSheetState extends State<_DivisionPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.7,
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      margin: const EdgeInsets.only(top: 8),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x1A000000),
-            blurRadius: 20,
-            offset: Offset(0, -4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          _buildDragHandle(),
-
-          // Header
-          _buildHeader(),
-
-          // Search
-          _buildSearchField(),
-
-          // Divider
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              height: 1,
-              color: AppColors.divider,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x1A000000),
+              blurRadius: 20,
+              offset: Offset(0, -4),
             ),
-          ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            _buildDragHandle(),
 
-          // List content
-          Flexible(child: _buildContent()),
+            // Header
+            _buildHeader(),
 
-          // Bottom safe area padding
-          SizedBox(height: bottomInset > 0 ? bottomInset : bottomPadding + 12),
-        ],
+            // Search
+            _buildSearchField(),
+
+            // Divider
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                height: 1,
+                color: AppColors.divider,
+              ),
+            ),
+
+            // List content
+            Flexible(child: _buildContent()),
+
+            // Bottom safe area padding
+            SizedBox(height: bottomPadding + 12),
+          ],
+        ),
       ),
     );
   }

@@ -55,6 +55,29 @@ abstract final class AuthService {
     _currentPegawai = pegawai;
   }
 
+  /// Refresh data pegawai dari database (sync jabatan, status, dll).
+  static Future<Pegawai?> refreshPegawai(String employeeId) async {
+    try {
+      await SupabaseService.ensureAuthenticated();
+
+      final response = await SupabaseService.client
+          .from('pegawai')
+          .select('*, jabatan:jabatan_id(id, nama)')
+          .eq('id', employeeId)
+          .maybeSingle();
+
+      if (response != null) {
+        final pegawai = Pegawai.fromMap(response);
+        _currentPegawai = pegawai;
+        return pegawai;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[AuthService] refreshPegawai error: $e');
+      return null;
+    }
+  }
+
   /// Login dengan ID pegawai (dari QR Code) + device binding.
   static Future<Pegawai> loginWithId(String employeeId) async {
     final trimmedId = employeeId.trim().toUpperCase();

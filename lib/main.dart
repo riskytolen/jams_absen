@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/services/supabase_service.dart';
 import 'core/theme/app_theme.dart';
-import 'screens/login/login_screen.dart';
+import 'screens/splash/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,7 +38,7 @@ class JamsAbsenApp extends StatelessWidget {
       title: 'Jams Attendance',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: const LoginScreen(),
+      home: const SplashScreen(),
     );
   }
 }

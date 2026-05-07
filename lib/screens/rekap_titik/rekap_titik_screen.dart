@@ -26,8 +26,8 @@ class _RekapTitikScreenState extends State<RekapTitikScreen> {
   Map<String, dynamic> _summary = {};
   bool _isLoading = true;
 
-  late int _selectedMonth;
-  late int _selectedYear;
+  late DateTime _periodStart;
+  late DateTime _periodEnd;
 
   final _currencyFormat = NumberFormat.currency(
     locale: 'id_ID',
@@ -38,24 +38,40 @@ class _RekapTitikScreenState extends State<RekapTitikScreen> {
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _selectedMonth = now.month;
-    _selectedYear = now.year;
+    _initPeriod();
     _loadData();
   }
 
+  /// Hitung periode aktif berdasarkan tanggal hari ini.
+  /// Periode: tanggal 8 bulan ini — tanggal 7 bulan depan.
+  void _initPeriod() {
+    final now = DateTime.now();
+    if (now.day >= 8) {
+      _periodStart = DateTime(now.year, now.month, 8);
+      _periodEnd = DateTime(now.year, now.month + 1, 7);
+    } else {
+      _periodStart = DateTime(now.year, now.month - 1, 8);
+      _periodEnd = DateTime(now.year, now.month, 7);
+    }
+  }
+
+  String _formatDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
+    final start = _formatDate(_periodStart);
+    final end = _formatDate(_periodEnd);
     final results = await Future.wait([
       DeliveryPointService.getDeliveryPoints(
         employeeId: widget.employeeId,
-        month: _selectedMonth,
-        year: _selectedYear,
+        startDate: start,
+        endDate: end,
       ),
-      DeliveryPointService.getMonthlySummary(
+      DeliveryPointService.getPeriodSummary(
         employeeId: widget.employeeId,
-        month: _selectedMonth,
-        year: _selectedYear,
+        startDate: start,
+        endDate: end,
       ),
     ]);
     if (mounted) {
@@ -67,23 +83,18 @@ class _RekapTitikScreenState extends State<RekapTitikScreen> {
     }
   }
 
-  void _changeMonth(int delta) {
+  void _changePeriod(int delta) {
     setState(() {
-      _selectedMonth += delta;
-      if (_selectedMonth > 12) {
-        _selectedMonth = 1;
-        _selectedYear++;
-      } else if (_selectedMonth < 1) {
-        _selectedMonth = 12;
-        _selectedYear--;
-      }
+      _periodStart = DateTime(_periodStart.year, _periodStart.month + delta, 8);
+      _periodEnd = DateTime(_periodStart.year, _periodStart.month + 1, 7);
     });
     _loadData();
   }
 
-  String get _monthLabel {
-    final date = DateTime(_selectedYear, _selectedMonth);
-    return DateFormat('MMMM yyyy', 'id_ID').format(date);
+  String get _periodLabel {
+    final startLabel = DateFormat('dd MMM', 'id_ID').format(_periodStart);
+    final endLabel = DateFormat('dd MMM yyyy', 'id_ID').format(_periodEnd);
+    return '$startLabel — $endLabel';
   }
 
   @override
@@ -154,19 +165,19 @@ class _RekapTitikScreenState extends State<RekapTitikScreen> {
                     children: [
                       _MonthArrowButton(
                         icon: Icons.chevron_left_rounded,
-                        onTap: () => _changeMonth(-1),
+                        onTap: () => _changePeriod(-1),
                       ),
                       Text(
-                        _monthLabel,
+                        _periodLabel,
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
                       ),
                       _MonthArrowButton(
                         icon: Icons.chevron_right_rounded,
-                        onTap: () => _changeMonth(1),
+                        onTap: () => _changePeriod(1),
                       ),
                     ],
                   ),
