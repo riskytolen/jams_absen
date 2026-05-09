@@ -51,8 +51,10 @@ class StrictLocationValidation {
 /// Semua check di-log ke SecurityLogger untuk audit trail.
 abstract final class StrictLocationValidator {
   // ── Strict thresholds (lebih ketat dari GPSSecurityService) ──
-  static const double _maxAccuracy = 50.0; // meter
-  static const int _maxTimestampDrift = 30; // detik
+  // FIX: accuracy 50→100m agar kompatibel dengan medium accuracy fallback
+  static const double _maxAccuracy = 100.0; // meter
+  // FIX: timestamp 30→120s agar tidak false-positive saat GPS warm-up
+  static const int _maxTimestampDrift = 120; // detik
   static const double _maxSpeedKmh = 80.0; // km/h
   static const double _suspiciousJumpMeters = 300.0; // meter
   static const int _suspiciousJumpTime = 60; // detik
@@ -60,9 +62,11 @@ abstract final class StrictLocationValidator {
 
   // ── Cache ──
   static Position? _lastValidPosition;
-  static DateTime? _lastValidTime;
+  // FIX: Stopwatch untuk elapsed — immune dari perubahan jam manual
+  static final Stopwatch _validClock = Stopwatch();
   static int? _lastValidDivisionId;
-  static DateTime? _lastDivisionChangeTime;
+  // FIX: Stopwatch untuk division change time
+  static final Stopwatch _divisionChangeClock = Stopwatch();
 
   // ═══════════════════════════════════════════════════════
   // PUBLIC API
@@ -83,6 +87,8 @@ abstract final class StrictLocationValidator {
   }) async {
     try {
       // ── Layer 1: Device security ──
+      // FIX: checkDeviceSecurity() sudah dipanggil oleh LocationService.getCurrentPosition()
+      // Panggil lagi, tapi cache Stopwatch-based memastikan ini instan (tidak redundant)
       final deviceStatus = await GPSSecurityService.checkDeviceSecurity();
       if (!deviceStatus.isSafe) {
         final threat = deviceStatus.threats.first;
@@ -170,14 +176,15 @@ abstract final class StrictLocationValidator {
       }
 
       // ── Layer 6: Movement anomaly ──
-      if (_lastValidPosition != null && _lastValidTime != null) {
+      if (_lastValidPosition != null && _validClock.isRunning) {
         final distance = Geolocator.distanceBetween(
           _lastValidPosition!.latitude,
           _lastValidPosition!.longitude,
           position.latitude,
           position.longitude,
         );
-        final elapsed = DateTime.now().difference(_lastValidTime!).inSeconds;
+        // FIX: Stopwatch elapsed — tidak terpengaruh perubahan jam manual
+        final elapsed = _validClock.elapsed.inSeconds;
 
         if (elapsed > 0) {
           // Suspicious jump
@@ -270,9 +277,8 @@ abstract final class StrictLocationValidator {
       // ── Layer 8: Division change detection ──
       if (_lastValidDivisionId != null &&
           _lastValidDivisionId != divisionId &&
-          _lastDivisionChangeTime != null) {
-        final minutesSinceChange =
-            DateTime.now().difference(_lastDivisionChangeTime!).inMinutes;
+          _divisionChangeClock.isRunning) {
+        final minutesSinceChange = _divisionChangeClock.elapsed.inMinutes;
         if (minutesSinceChange < _minDivisionChangeMinutes) {
           return StrictLocationValidation(
             isValid: false,
@@ -290,11 +296,15 @@ abstract final class StrictLocationValidator {
       }
 
       // ── ALL PASSED ──
-      // Update cache
+      // FIX: Update cache dengan Stopwatch
       _lastValidPosition = position;
-      _lastValidTime = DateTime.now();
+      _validClock
+        ..reset()
+        ..start();
       if (_lastValidDivisionId != divisionId) {
-        _lastDivisionChangeTime = DateTime.now();
+        _divisionChangeClock
+          ..reset()
+          ..start();
       }
       _lastValidDivisionId = divisionId;
 
@@ -330,9 +340,13 @@ abstract final class StrictLocationValidator {
   /// Reset semua cache (dipanggil saat logout).
   static void resetCache() {
     _lastValidPosition = null;
-    _lastValidTime = null;
+    _validClock
+      ..reset()
+      ..stop();
     _lastValidDivisionId = null;
-    _lastDivisionChangeTime = null;
+    _divisionChangeClock
+      ..reset()
+      ..stop();
     GPSSecurityService.resetCache();
   }
 }

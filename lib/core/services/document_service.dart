@@ -16,7 +16,8 @@ abstract final class DocumentService {
       var query = SupabaseService.client
           .from('legal_documents')
           .select()
-          .eq('employee_id', employeeId);
+          .eq('employee_id', employeeId)
+          .eq('status_approval', 'Disetujui');
 
       if (kategori != null) {
         query = query.eq('kategori', kategori);
@@ -46,7 +47,8 @@ abstract final class DocumentService {
       final response = await SupabaseService.client
           .from('legal_documents')
           .select('kategori, status')
-          .eq('employee_id', employeeId);
+          .eq('employee_id', employeeId)
+          .eq('status_approval', 'Disetujui');
 
       final data = List<Map<String, dynamic>>.from(response as List);
 

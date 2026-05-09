@@ -107,6 +107,9 @@ abstract final class FaceMatchService {
   }
 
   /// Extract 128-dim descriptor dari image bytes.
+  ///
+  /// FIX: Resize ke 640px dan pakai fallback TinyFaceDetector
+  /// agar face-api.js bisa mendeteksi wajah close-up (Realme dll).
   static Future<List<double>?> extractDescriptor(Uint8List imageBytes) async {
     if (!_modelsLoaded || _webCtrl == null) {
       debugPrint('[FaceMatch] Not ready');
@@ -114,12 +117,14 @@ abstract final class FaceMatchService {
     }
 
     try {
-      // Compress image
+      // Compress dan resize ke 640px — lebih besar dari 480 sebelumnya.
+      // Ini mencegah wajah terlalu besar/terpotong di kamera selfie
+      // beresolusi tinggi (Realme 4000x3000 → 640x480).
       final compressed = await compress.FlutterImageCompress.compressWithList(
         imageBytes,
-        minWidth: 480,
-        minHeight: 480,
-        quality: 75,
+        minWidth: 640,
+        minHeight: 640,
+        quality: 85,  // Naikkan kualitas untuk detail wajah lebih baik
         format: compress.CompressFormat.jpeg,
       );
       debugPrint('[FaceMatch] Image: ${imageBytes.length} -> ${compressed.length} bytes');
@@ -129,6 +134,8 @@ abstract final class FaceMatchService {
       _resultCompleter = Completer<Map<String, dynamic>>();
 
       // Kirim ke WebView via evaluateJavascript
+      // FIX: Turunkan minConfidence + tambahkan fallback TinyFaceDetector
+      // jika SSD gagal (sering terjadi di close-up selfie Realme)
       await _webCtrl!.evaluateJavascript(source: '''
         (async function() {
           try {
@@ -149,11 +156,21 @@ abstract final class FaceMatchService {
             c.height = img.naturalHeight;
             c.getContext('2d').drawImage(img, 0, 0);
             
+            // Coba SSD dulu (lebih akurat) dengan confidence rendah
             var det = await faceapi
-              .detectSingleFace(c, new faceapi.SsdMobilenetv1Options({minConfidence: 0.3}))
+              .detectSingleFace(c, new faceapi.SsdMobilenetv1Options({minConfidence: 0.15}))
               .withFaceLandmarks()
               .withFaceDescriptor();
             
+            // Fallback: jika SSD gagal, coba TinyFaceDetector
+            // TinyFaceDetector lebih toleran terhadap wajah close-up/parsial
+            if (!det) {
+              det = await faceapi
+                .detectSingleFace(c, new faceapi.TinyFaceDetectorOptions({inputSize: 512, scoreThreshold: 0.3}))
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+            }
+
             if (!det) {
               window.flutter_inappwebview.callHandler('onResult', {event:'extract_error', error:'no_face'});
             } else {
@@ -252,6 +269,7 @@ abstract final class FaceMatchService {
         var modelUrl = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.14/model';
         await Promise.all([
           faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl),
+          faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl),
           faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl),
           faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl)
         ]);

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'location_service.dart';
+import 'server_time_service.dart';
 import 'supabase_service.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -270,9 +271,8 @@ abstract final class AttendanceService {
     try {
       await SupabaseService.ensureAuthenticated();
 
-      final today = DateTime.now();
-      final tanggal =
-          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      // Gunakan waktu server untuk mendapatkan tanggal hari ini
+      final tanggal = await ServerTimeService.getServerDate();
 
       final response = await SupabaseService.client
           .from('attendance_records')
@@ -300,9 +300,8 @@ abstract final class AttendanceService {
     try {
       await SupabaseService.ensureAuthenticated();
 
-      final today = DateTime.now();
-      final tanggal =
-          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      // Gunakan waktu server untuk mendapatkan tanggal hari ini
+      final tanggal = await ServerTimeService.getServerDate();
 
       final response = await SupabaseService.client
           .from('attendance_records')
@@ -329,9 +328,8 @@ abstract final class AttendanceService {
     try {
       await SupabaseService.ensureAuthenticated();
 
-      final today = DateTime.now();
-      final tanggal =
-          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      // Gunakan waktu server untuk mendapatkan tanggal hari ini
+      final tanggal = await ServerTimeService.getServerDate();
 
       final response = await SupabaseService.client
           .from('attendance_records')
@@ -407,8 +405,9 @@ abstract final class AttendanceService {
   /// Flow:
   /// 1. Cek duplikat (sudah absen hari ini?)
   /// 2. Ambil jadwal divisi
-  /// 3. Hitung status kehadiran
-  /// 4. Insert record ke database
+  /// 3. Ambil waktu server (tidak bisa dimanipulasi!)
+  /// 4. Hitung status kehadiran
+  /// 5. Insert record ke database
   ///
   /// Returns Map berisi data record yang berhasil di-insert.
   /// Throws [AttendanceException] jika ada error di salah satu step.
@@ -419,26 +418,50 @@ abstract final class AttendanceService {
     String? catatan,
   }) async {
     try {
-      await SupabaseService.ensureAuthenticated();
+      // Force auth check SEKALI di awal — semua internal call skip auth
+      await SupabaseService.forceEnsureAuthenticated();
 
-      // 1. Cek apakah sudah absen hari ini
-      final alreadyCheckedIn = await hasCheckedInToday(
-        employeeId: employeeId,
-        divisionId: divisionId,
-      );
+      // Ambil waktu server SEKALI — gunakan untuk semua kebutuhan
+      final now = await ServerTimeService.getServerTime();
+      debugPrint('[AttendanceService] Waktu server untuk absensi: $now');
 
-      if (alreadyCheckedIn) {
+      final tanggal =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      // 1. Cek apakah sudah absen hari ini (gunakan tanggal dari server time)
+      final existingRecord = await SupabaseService.client
+          .from('attendance_records')
+          .select('id')
+          .eq('employee_id', employeeId)
+          .eq('division_id', divisionId)
+          .eq('tanggal', tanggal)
+          .maybeSingle();
+
+      if (existingRecord != null) {
         throw const AttendanceException(
           type: AttendanceErrorType.alreadyCheckedIn,
           message: 'Anda sudah melakukan absensi hari ini.',
         );
       }
 
-      // 2. Ambil jadwal divisi
-      final schedule = await getDivisionSchedule(divisionId);
+      // 2. Ambil jadwal divisi (langsung query, auth sudah cached)
+      final schedule = await SupabaseService.client
+          .from('division_schedules')
+          .select(
+              'id, division_id, jam_masuk, jam_pulang, toleransi_menit, status')
+          .eq('division_id', divisionId)
+          .eq('status', 'Aktif')
+          .maybeSingle();
+
+      if (schedule == null) {
+        throw const AttendanceException(
+          type: AttendanceErrorType.noSchedule,
+          message: 'Tidak ada jadwal aktif untuk divisi ini. '
+              'Hubungi admin untuk mengatur jadwal.',
+        );
+      }
 
       // 3. Hitung status kehadiran
-      final now = DateTime.now();
       final jamMasukStr = schedule['jam_masuk'] as String;
       final toleransiMenit = schedule['toleransi_menit'] as int;
 
@@ -453,8 +476,6 @@ abstract final class AttendanceService {
       final primaryLocation = locations.first;
 
       // 5. Siapkan data record
-      final tanggal =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
       final jamMasukRecord =
           '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
 

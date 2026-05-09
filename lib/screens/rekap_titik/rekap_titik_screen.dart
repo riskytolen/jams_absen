@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/services/delivery_point_service.dart';
+import '../../core/services/server_time_service.dart';
 
 /// Screen rekap titik pengiriman — menampilkan data delivery points
 /// per bulan dengan ringkasan dan daftar detail.
@@ -45,7 +46,7 @@ class _RekapTitikScreenState extends State<RekapTitikScreen> {
   /// Hitung periode aktif berdasarkan tanggal hari ini.
   /// Periode: tanggal 8 bulan ini — tanggal 7 bulan depan.
   void _initPeriod() {
-    final now = DateTime.now();
+    final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
     if (now.day >= 8) {
       _periodStart = DateTime(now.year, now.month, 8);
       _periodEnd = DateTime(now.year, now.month + 1, 7);

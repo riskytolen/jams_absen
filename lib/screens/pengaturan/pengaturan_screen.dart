@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../core/utils/app_version.dart';
 import '../../core/services/update_service.dart';
 
 /// Screen pengaturan — versi aplikasi & update in-app.
@@ -13,7 +14,6 @@ class PengaturanScreen extends StatefulWidget {
 }
 
 class _PengaturanScreenState extends State<PengaturanScreen> {
-  String _currentVersion = '-';
   UpdateInfo? _updateInfo;
   bool _isChecking = false;
   bool _isDownloading = false;
@@ -22,12 +22,6 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
   @override
   void initState() {
     super.initState();
-    _loadVersion();
-  }
-
-  Future<void> _loadVersion() async {
-    final version = await UpdateService.getCurrentVersion();
-    if (mounted) setState(() => _currentVersion = version);
   }
 
   Future<void> _checkUpdate() async {
@@ -390,7 +384,7 @@ class _PengaturanScreenState extends State<PengaturanScreen> {
               icon: Icons.info_outline_rounded,
               iconColor: AppColors.primary,
               title: 'Versi Aplikasi',
-              subtitle: 'v$_currentVersion',
+              subtitle: AppVersion.label,
               trailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(

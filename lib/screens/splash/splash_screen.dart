@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/app_version.dart';
 import '../login/login_screen.dart';
 
 /// Splash screen — animated logo dengan gradient background.
@@ -224,7 +225,7 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'v1.5.0',
+                        AppVersion.label,
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w400,

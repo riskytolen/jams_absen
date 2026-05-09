@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/services/schedule_service.dart';
+import '../../core/services/server_time_service.dart';
 
 /// Screen jadwal kerja — menampilkan kalender bulanan
 /// dengan hari kerja dan hari libur karyawan.
@@ -33,7 +34,7 @@ class _JadwalScreenState extends State<JadwalScreen> {
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
+    final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
     _selectedMonth = now.month;
     _selectedYear = now.year;
     _loadData();
@@ -344,7 +345,7 @@ class _JadwalScreenState extends State<JadwalScreen> {
       overrideMap[o['tanggal'] as String] = o['type'] as String;
     }
 
-    final today = DateTime.now();
+    final today = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
     final isCurrentMonth =
         today.month == _selectedMonth && today.year == _selectedYear;
 

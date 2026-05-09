@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../core/theme/app_text_styles.dart';
+import '../../core/services/server_time_service.dart';
 
-/// Widget jam digital real-time dengan format Indonesia.
+/// Widget jam digital live yang menampilkan waktu server.
 ///
-/// Menggunakan [RepaintBoundary] untuk mengisolasi rebuild
-/// agar tidak mempengaruhi widget parent.
+/// Menggunakan [ServerTimeService.getEstimatedServerTime()] yang berbasis
+/// offset dari waktu server, sehingga tidak bisa dimanipulasi via jam HP.
 class LiveClockWidget extends StatefulWidget {
   const LiveClockWidget({super.key});
 
@@ -16,20 +16,22 @@ class LiveClockWidget extends StatefulWidget {
 
 class _LiveClockWidgetState extends State<LiveClockWidget> {
   late Timer _timer;
-  DateTime _now = DateTime.now();
-
-  static final _timeFormat = DateFormat('HH:mm:ss');
-  static final _dateFormat = DateFormat('EEEE, dd MMMM yyyy', 'id_ID');
+  late DateTime _currentTime;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) {
-        if (mounted) setState(() => _now = DateTime.now());
-      },
-    );
+    // Gunakan waktu server (offset-corrected) jika tersedia
+    _currentTime = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {
+          // Selalu gunakan estimasi waktu server
+          _currentTime =
+              ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
+        });
+      }
+    });
   }
 
   @override
@@ -40,29 +42,31 @@ class _LiveClockWidgetState extends State<LiveClockWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _timeFormat.format(_now),
-            style: AppTextStyles.numericLg.copyWith(
-              shadows: [
-                Shadow(
-                  color: Colors.black.withValues(alpha: 0.20),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
+    final timeStr = DateFormat('HH:mm:ss').format(_currentTime);
+    final dateStr = DateFormat('EEEE, dd MMMM yyyy', 'id_ID').format(_currentTime);
+
+    return Column(
+      children: [
+        Text(
+          timeStr,
+          style: const TextStyle(
+            fontSize: 48,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+            letterSpacing: 2,
+            fontFeatures: [FontFeature.tabularFigures()],
           ),
-          const SizedBox(height: 4),
-          Text(
-            _dateFormat.format(_now),
-            style: AppTextStyles.onDarkBody,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          dateStr,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.white.withValues(alpha: 0.7),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

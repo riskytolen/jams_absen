@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/services/announcement_service.dart';
+import '../../core/services/server_time_service.dart';
 
 /// Screen info / pengumuman perusahaan.
 class InfoScreen extends StatefulWidget {
@@ -573,7 +574,7 @@ class _AnnouncementCardState extends State<_AnnouncementCard> {
   }
 
   String _formatTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
+    final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
     final diff = now.difference(dateTime);
 
     if (diff.inMinutes < 60) {

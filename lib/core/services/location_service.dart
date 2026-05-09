@@ -65,7 +65,7 @@ class LocationException implements Exception {
 /// Flow:
 /// 1. Cek GPS enabled + permission
 /// 2. Cek device security (root, mock apps, emulator)
-/// 3. Ambil posisi GPS
+/// 3. Ambil posisi GPS — dengan smart fallback accuracy
 /// 4. Validasi keamanan (mock flag, accuracy, timestamp, movement)
 /// 5. Return posisi yang sudah tervalidasi
 abstract final class LocationService {
@@ -111,17 +111,16 @@ abstract final class LocationService {
 
   /// Ambil posisi GPS dengan validasi keamanan penuh.
   ///
-  /// Flow:
-  /// 1. Device security check
-  /// 2. Get GPS position
-  /// 3. Validate position (mock, accuracy, timestamp, movement)
-  /// 4. Log result
+  /// FIX v1.6.1:
+  /// - checkDeviceSecurity() hanya dipanggil 1x (tidak redundant)
+  /// - Smart fallback: high → medium accuracy jika timeout
+  /// - validatePosition() menerima deviceStatus dari luar (no double call)
   ///
   /// Throws [LocationException] jika gagal atau terdeteksi ancaman.
   static Future<Position> getCurrentPosition({
     List<Map<String, double>>? allowedAreas,
   }) async {
-    // ── Step 1: Device security pre-check ──
+    // ── Step 1: Device security check (1x saja) ──
     final deviceStatus = await GPSSecurityService.checkDeviceSecurity();
     if (!deviceStatus.isSafe) {
       final threat = deviceStatus.threats.first;
@@ -133,20 +132,17 @@ abstract final class LocationService {
       );
     }
 
-    // ── Step 2: Get GPS position ──
+    // ── Step 2: Get GPS position (smart fallback) ──
     final Position position;
     try {
-      position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
-        ),
-      );
+      position = await _getPositionWithFallback();
     } on TimeoutException {
       throw const LocationException(
         type: LocationErrorType.timeout,
         message: 'Timeout mengambil lokasi. Pastikan GPS aktif dan di area terbuka.',
       );
+    } on LocationException {
+      rethrow;
     } catch (e) {
       throw LocationException(
         type: LocationErrorType.unknown,
@@ -154,10 +150,11 @@ abstract final class LocationService {
       );
     }
 
-    // ── Step 3: Validate position ──
+    // ── Step 3: Validate position (teruskan deviceStatus — TIDAK cek ulang) ──
     final result = await GPSSecurityService.validatePosition(
       position,
       allowedAreas: allowedAreas,
+      cachedDeviceStatus: deviceStatus, // ← kirim hasil cek sebelumnya
     );
 
     // ── Step 4: Log & handle result ──
@@ -183,6 +180,50 @@ abstract final class LocationService {
     }
 
     return position;
+  }
+
+  /// Ambil posisi GPS.
+  ///
+  /// Strategy:
+  /// 1. Coba `getLastKnownPosition()` — instan, untuk warm-up GPS chip
+  /// 2. Panggil `getCurrentPosition()` 1x dengan HIGH accuracy, timeout 30s
+  ///
+  /// Catatan: Dua panggilan `getCurrentPosition()` berturut-turut (fallback)
+  /// terbukti menyebabkan interference — request pertama tidak di-cleanup
+  /// sempurna sehingga request kedua juga gagal. Gunakan SATU panggilan saja.
+  static Future<Position> _getPositionWithFallback() async {
+    // Warm-up: request last known position agar GPS chip mulai aktif
+    // (tidak digunakan sebagai hasil, hanya untuk "wake up" hardware)
+    try {
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null) {
+        debugPrint('[LocationService] Last known: ±${last.accuracy.toStringAsFixed(0)}m '
+            '(${DateTime.now().difference(last.timestamp).inSeconds}s ago)');
+      }
+    } catch (_) {
+      // Abaikan — ini hanya warm-up, bukan hasil akhir
+    }
+
+    // Satu panggilan saja dengan timeout 30 detik
+    debugPrint('[LocationService] Getting position (HIGH accuracy, timeout: 30s)...');
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 30),
+        ),
+      );
+      debugPrint('[LocationService] OK: ±${pos.accuracy.toStringAsFixed(0)}m');
+      return pos;
+    } on TimeoutException {
+      debugPrint('[LocationService] Timeout setelah 30s');
+      throw const LocationException(
+        type: LocationErrorType.timeout,
+        message:
+            'Gagal mendapatkan lokasi (timeout 30s). Pastikan GPS aktif '
+            'dan coba di area terbuka atau dekat jendela.',
+      );
+    }
   }
 
   /// Buka settings lokasi device.

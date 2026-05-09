@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'server_time_service.dart';
 import 'supabase_service.dart';
 
 /// Service realtime untuk attendance_records menggunakan Supabase Realtime.
@@ -31,6 +32,7 @@ class AttendanceRealtimeService with WidgetsBindingObserver {
   final _dataChangedController = ValueNotifier<Map<String, dynamic>?>(null);
   final _loadingController = ValueNotifier<bool>(false);
   final _errorController = ValueNotifier<String?>(null);
+  final _statsChangedController = ValueNotifier<int>(0);
   bool _isSubscribed = false;
   bool _isInBackground = false;
 
@@ -45,6 +47,15 @@ class AttendanceRealtimeService with WidgetsBindingObserver {
 
   /// Error message jika ada.
   ValueNotifier<String?> get error => _errorController;
+
+  /// Notifier untuk trigger refresh stats di dashboard.
+  /// Nilai berubah setiap kali ada perubahan data realtime.
+  ValueNotifier<int> get onStatsChanged => _statsChangedController;
+
+  /// Notify bahwa stats perlu di-refresh.
+  void _notifyStatsChanged() {
+    _statsChangedController.value++;
+  }
 
   /// Subscribe ke Supabase Realtime channel.
   ///
@@ -78,8 +89,8 @@ class AttendanceRealtimeService with WidgetsBindingObserver {
   }
 
   /// Setup Supabase Realtime channel untuk Postgres Changes.
-  void _setupRealtimeChannel() {
-    final today = _todayString();
+  void _setupRealtimeChannel() async {
+    final today = await _todayString();
 
     _channel = SupabaseService.client
         .channel('attendance_$employeeId')
@@ -112,12 +123,13 @@ class AttendanceRealtimeService with WidgetsBindingObserver {
       debugPrint('[AttendanceRealtime] Event: $eventType');
 
       if (eventType == PostgresChangeEvent.delete) {
-        // Record dihapus — cek apakah itu record hari ini
-        final oldRecord = payload.oldRecord;
-        if (oldRecord['tanggal'] == today) {
-          _dataChangedController.value = null;
-          debugPrint('[AttendanceRealtime] Record deleted');
-        }
+        // Record dihapus — JANGAN andalkan oldRecord (butuh REPLICA IDENTITY FULL).
+        // Langsung re-fetch untuk mendapatkan state terbaru.
+        debugPrint('[AttendanceRealtime] DELETE detected, re-fetching...');
+        _fetchTodayRecord().then((_) {
+          // Trigger stats refresh setelah data berubah
+          _notifyStatsChanged();
+        });
         return;
       }
 
@@ -125,12 +137,15 @@ class AttendanceRealtimeService with WidgetsBindingObserver {
       final newRecord = payload.newRecord;
       if (newRecord['tanggal'] == today) {
         // Fetch ulang dengan join divisions untuk dapat nama divisi
-        _fetchTodayRecord();
+        _fetchTodayRecord().then((_) {
+          // Trigger stats refresh setelah data berubah
+          _notifyStatsChanged();
+        });
       }
     } catch (e) {
       debugPrint('[AttendanceRealtime] Handle event error: $e');
       // Fallback: fetch ulang
-      _fetchTodayRecord();
+      _fetchTodayRecord().then((_) => _notifyStatsChanged());
     }
   }
 
@@ -139,7 +154,7 @@ class AttendanceRealtimeService with WidgetsBindingObserver {
     try {
       await SupabaseService.ensureAuthenticated();
 
-      final today = _todayString();
+      final today = await _todayString();
 
       final response = await SupabaseService.client
           .from('attendance_records')
@@ -191,6 +206,7 @@ class AttendanceRealtimeService with WidgetsBindingObserver {
     _dataChangedController.dispose();
     _loadingController.dispose();
     _errorController.dispose();
+    _statsChangedController.dispose();
   }
 
   // ═══════════════════════════════════════════════════════
@@ -232,8 +248,7 @@ class AttendanceRealtimeService with WidgetsBindingObserver {
   // HELPERS
   // ═══════════════════════════════════════════════════════
 
-  String _todayString() {
-    final today = DateTime.now();
-    return '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+  Future<String> _todayString() async {
+    return await ServerTimeService.getServerDate();
   }
 }

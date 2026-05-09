@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'server_time_service.dart';
 import 'supabase_service.dart';
 
 /// Service untuk mengelola pengajuan cuti/izin/sakit.
@@ -118,7 +119,8 @@ abstract final class LeaveService {
     try {
       await SupabaseService.ensureAuthenticated();
 
-      final year = DateTime.now().year;
+      final serverTime = ServerTimeService.getEstimatedServerTime();
+      final year = (serverTime ?? DateTime.now()).year;
 
       final response = await SupabaseService.client
           .from('leave_settings')
@@ -174,7 +176,8 @@ abstract final class LeaveService {
     try {
       await SupabaseService.ensureAuthenticated();
 
-      final year = DateTime.now().year;
+      final serverTime = ServerTimeService.getEstimatedServerTime();
+      final year = (serverTime ?? DateTime.now()).year;
 
       // Fetch settings & leave data
       final settings = await getLeaveSettings();

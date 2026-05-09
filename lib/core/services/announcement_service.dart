@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'server_time_service.dart';
 import 'supabase_service.dart';
 
 /// Service untuk mengelola data pengumuman perusahaan.
@@ -19,9 +20,7 @@ abstract final class AnnouncementService {
     try {
       await SupabaseService.ensureAuthenticated();
 
-      final today = DateTime.now();
-      final todayStr =
-          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final todayStr = await ServerTimeService.getServerDate();
 
       final response = await SupabaseService.client
           .from('announcements')

@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/services/document_service.dart';
+import '../../core/services/server_time_service.dart';
 
 /// Screen dokumen legal — menampilkan PKWT & Surat Peringatan.
 class DokumenScreen extends StatefulWidget {
@@ -367,7 +368,7 @@ class _DocumentCard extends StatelessWidget {
     // Hitung sisa hari
     String? sisaHari;
     if (tanggalBerakhir != null) {
-      final diff = tanggalBerakhir.difference(DateTime.now()).inDays;
+      final diff = tanggalBerakhir.difference(ServerTimeService.getEstimatedServerTime() ?? DateTime.now()).inDays;
       if (diff > 0 && status != 'Berakhir') {
         sisaHari = '$diff hari lagi';
       } else if (diff <= 0) {

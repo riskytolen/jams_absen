@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -45,6 +46,10 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
   bool _eyesClosed = false;
   DateTime? _faceFoundAt;
 
+  // Device orientation untuk rotasi ML Kit
+  // Screen dikunci ke portraitUp, jadi selalu 0°
+  // Dibiarkan sebagai metode agar mudah diubah jika butuh landscape di masa depan
+
   // Status
   String _message = 'Menyiapkan kamera...';
   String _sub = '';
@@ -53,6 +58,10 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
   @override
   void initState() {
     super.initState();
+    // Kunci orientasi ke portrait agar kalkulasi rotasi ML Kit konsisten
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
     _setup();
   }
 
@@ -60,12 +69,12 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
     // Init face-api.js models di background
     FaceMatchService.initialize();
 
-    // Init ML Kit
+    // Init ML Kit — minFaceSize 0.15 agar deteksi lebih sensitif
     _detector = FaceDetector(
       options: FaceDetectorOptions(
         enableClassification: true,
         performanceMode: FaceDetectorMode.fast,
-        minFaceSize: 0.25,
+        minFaceSize: 0.15, // FIX: 0.25→0.15 untuk kamera selfie kecil
       ),
     );
 
@@ -76,15 +85,55 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
         (c) => c.lensDirection == CameraLensDirection.front,
         orElse: () => cameras.first,
       );
-      _camera = CameraController(front, ResolutionPreset.medium,
-          enableAudio: false, imageFormatGroup: ImageFormatGroup.nv21);
+
+      // FIX: Pilih format berdasarkan platform.
+      // nv21 = Android, bgra8888 = iOS
+      // Jika nv21 tidak didukung device, _convert() akan fallback otomatis.
+      _camera = CameraController(
+        front,
+        ResolutionPreset.medium,
+        enableAudio: false,
+        imageFormatGroup: defaultTargetPlatform == TargetPlatform.iOS
+            ? ImageFormatGroup.bgra8888
+            : ImageFormatGroup.nv21,
+      );
       await _camera!.initialize();
       if (!mounted) return;
       setState(() {
         _cameraReady = true;
         _phase = _Phase.detectFace;
-        _message = 'Posisikan wajah di dalam frame';
-        _sub = 'Pastikan pencahayaan cukup';
+        _message = 'Arahkan wajah ke kamera';
+        _sub = 'Dekatkan wajah agar terlihat jelas';
+      });
+      _camera!.startImageStream(_onFrame);
+    } catch (e) {
+      // Jika gagal dengan nv21, coba lagi tanpa format khusus
+      await _setupFallbackCamera();
+    }
+  }
+
+  /// Fallback: inisialisasi kamera tanpa imageFormatGroup spesifik.
+  /// Dipanggil jika setup pertama gagal (device tidak support nv21).
+  Future<void> _setupFallbackCamera() async {
+    try {
+      final cameras = await availableCameras();
+      final front = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+      _camera = CameraController(
+        front,
+        ResolutionPreset.medium,
+        enableAudio: false,
+        // Tanpa imageFormatGroup — Flutter pilih otomatis
+      );
+      await _camera!.initialize();
+      if (!mounted) return;
+      setState(() {
+        _cameraReady = true;
+        _phase = _Phase.detectFace;
+        _message = 'Arahkan wajah ke kamera';
+        _sub = 'Dekatkan wajah agar terlihat jelas';
       });
       _camera!.startImageStream(_onFrame);
     } catch (e) {
@@ -94,6 +143,13 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
 
   @override
   void dispose() {
+    // Kembalikan orientasi ke semua arah
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     _camera?.dispose();
     _detector?.close();
     super.dispose();
@@ -124,7 +180,7 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
         if (_phase != _Phase.init) {
           setState(() {
             _phase = _Phase.detectFace;
-            _message = 'Posisikan wajah di dalam frame';
+            _message = 'Arahkan wajah ke kamera';
             _sub = 'Pastikan pencahayaan cukup';
             _faceFoundAt = null;
           });
@@ -133,6 +189,28 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
       }
 
       final face = faces.first;
+
+      // ── Validasi ukuran wajah ──────────────────────────────────────────
+      // Hitung seberapa besar wajah di frame (% area)
+      // Tidak bergantung pada posisi oval, berlaku konsisten semua device
+      final frameArea = img.width * img.height;
+      final faceRect = face.boundingBox;
+      final faceArea = faceRect.width * faceRect.height;
+      final faceCoverage = faceArea / frameArea; // 0.0 – 1.0
+
+      // Wajah harus menutupi minimal 8% area frame
+      // (~25cm dari kamera, cukup untuk verifikasi akurat)
+      const minCoverage = 0.08;
+      if (faceCoverage < minCoverage) {
+        setState(() {
+          _message = 'Dekatkan wajah ke kamera';
+          _sub = 'Wajah terlalu jauh atau kecil';
+          _faceFoundAt = null;
+        });
+        return;
+      }
+      // ──────────────────────────────────────────────────────────────────
+
       final lo = face.leftEyeOpenProbability ?? 1;
       final ro = face.rightEyeOpenProbability ?? 1;
       final open = lo > 0.5 && ro > 0.5;
@@ -360,14 +438,32 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
     } catch (_) {}
   }
 
+  /// Konversi CameraImage ke InputImage untuk ML Kit.
+  ///
+  /// FIX v2: Beberapa device Realme/MediaTek mengirim frame dalam format
+  /// yuv_420_888 (raw=35) yang tidak dikenali ML Kit via fromRawValue().
+  /// Solusi: fallback ke nv21 + Y-plane saja (luminance) —
+  /// cukup untuk face detection karena ML Kit menggunakan channel luminance.
   InputImage? _convert(CameraImage img) {
     try {
-      final fmt = InputImageFormatValue.fromRawValue(img.format.raw);
-      final rot = InputImageRotationValue.fromRawValue(
-          _camera!.description.sensorOrientation);
-      if (fmt == null || rot == null) return null;
+      // Coba deteksi format yang dikenal ML Kit (nv21=17, bgra8888=875704422)
+      // yuv_420_888 (raw=35) akan return null → fallback ke nv21
+      final fmt = InputImageFormatValue.fromRawValue(img.format.raw)
+          ?? InputImageFormat.nv21; // fallback untuk yuv420
+
+      // Rotasi: sensorOrientation langsung — screen sudah dikunci portrait
+      final sensorDeg = _camera!.description.sensorOrientation;
+      final rot = _degreesToRotation(sensorDeg);
+      if (rot == null) return null;
+
+      // Gunakan Y-plane (planes[0]) saja:
+      // • NV21: planes[0] adalah NV21 data (Y + interleaved VU)
+      // • YUV420: planes[0] adalah Y-plane (luminance) — cukup untuk ML Kit
+      // JANGAN concatenate semua planes — merusak format NV21!
+      final bytes = img.planes.first.bytes;
+
       return InputImage.fromBytes(
-        bytes: img.planes.first.bytes,
+        bytes: bytes,
         metadata: InputImageMetadata(
           size: Size(img.width.toDouble(), img.height.toDouble()),
           rotation: rot,
@@ -377,6 +473,21 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
       );
     } catch (_) {
       return null;
+    }
+  }
+
+  InputImageRotation? _degreesToRotation(int degrees) {
+    switch (degrees) {
+      case 0:
+        return InputImageRotation.rotation0deg;
+      case 90:
+        return InputImageRotation.rotation90deg;
+      case 180:
+        return InputImageRotation.rotation180deg;
+      case 270:
+        return InputImageRotation.rotation270deg;
+      default:
+        return InputImageRotation.rotation0deg;
     }
   }
 
@@ -552,9 +663,11 @@ class _OvalPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * 0.38);
-    final w = size.width * 0.62;
-    final h = w * 1.35;
+    // Oval besar dan adaptif — sebagai panduan visual saja
+    // Validasi wajah dilakukan via face coverage (% area frame), bukan posisi oval
+    final center = Offset(size.width / 2, size.height * 0.40);
+    final w = size.width * 0.82; // 82% lebar layar — muat berbagai ukuran wajah
+    final h = w * 1.28;          // Proporsional, tidak terlalu panjang
     final rect = Rect.fromCenter(center: center, width: w, height: h);
 
     final path = Path()

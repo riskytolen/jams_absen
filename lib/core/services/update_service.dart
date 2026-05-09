@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:package_info_plus/package_info_plus.dart';
+import '../utils/app_version.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// Model untuk informasi update.
@@ -43,15 +43,12 @@ abstract final class UpdateService {
   static const _repoName = 'absen';
 
   /// Ambil versi aplikasi saat ini.
-  static Future<String> getCurrentVersion() async {
-    final info = await PackageInfo.fromPlatform();
-    return info.version;
-  }
+  static String getCurrentVersion() => AppVersion.version;
 
   /// Cek apakah ada update terbaru di GitHub Releases.
   static Future<UpdateInfo> checkForUpdate() async {
     try {
-      final currentVersion = await getCurrentVersion();
+      final currentVersion = getCurrentVersion();
 
       final dio = Dio();
       final response = await dio.get(
@@ -104,7 +101,7 @@ abstract final class UpdateService {
       );
     } catch (e) {
       debugPrint('[UpdateService] checkForUpdate error: $e');
-      final currentVersion = await getCurrentVersion();
+      final currentVersion = getCurrentVersion();
       return UpdateInfo(
         latestVersion: currentVersion,
         currentVersion: currentVersion,

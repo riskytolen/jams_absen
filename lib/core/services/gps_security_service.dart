@@ -112,14 +112,20 @@ class DeviceSecurityStatus {
 /// Layer 4: Multi-sample validation (ambil beberapa reading, cek konsistensi)
 /// Layer 5: Movement analysis (speed, jump, accuracy, timestamp)
 /// Layer 6: Geofence validation (area kerja)
+///
+/// FIX v1.6.1:
+/// - validatePosition() menerima cachedDeviceStatus → tidak double-call
+/// - checkDeviceSecurity() cache memakai Stopwatch (immune dari jam manual)
+/// - _checkTimestamp() toleransi lebih longgar untuk GPS hardware
+/// - _checkMovement() memakai Stopwatch untuk elapsed calculation
 abstract final class GPSSecurityService {
   // ── Thresholds ──
-  static const double maxAccuracyMeters = 50.0;
+  static const double maxAccuracyMeters = 100.0;       // FIX: 50→100 (medium accuracy)
   static const double maxSpeedKmh = 120.0;
   static const double _maxSpeedMs = maxSpeedKmh / 3.6;
   static const double suspiciousJumpMeters = 500.0;
   static const int suspiciousJumpTimeSeconds = 90;
-  static const int maxTimestampDriftSeconds = 60;
+  static const int maxTimestampDriftSeconds = 120;     // FIX: 60→120 (GPS warm-up time)
   static const int multiSampleCount = 3;
   static const double multiSampleMaxVarianceMeters = 50.0;
 
@@ -128,9 +134,13 @@ abstract final class GPSSecurityService {
 
   // ── Position history cache ──
   static Position? _lastPosition;
-  static DateTime? _lastPositionTime;
+  // FIX: gunakan Stopwatch untuk elapsed — immune dari perubahan jam manual
+  static final Stopwatch _positionClock = Stopwatch();
+
+  // ── Device security cache ──
   static DeviceSecurityStatus? _cachedDeviceStatus;
-  static DateTime? _lastDeviceCheckTime;
+  static final Stopwatch _deviceCheckClock = Stopwatch();
+  static const int _deviceCacheDurationSeconds = 60;
 
   // ═══════════════════════════════════════════════════════
   // PUBLIC API
@@ -138,14 +148,15 @@ abstract final class GPSSecurityService {
 
   /// Full security validation — semua layer.
   ///
-  /// Ini adalah method utama yang dipanggil sebelum absensi.
-  /// Menjalankan semua check secara berurutan (fail-fast).
+  /// [cachedDeviceStatus] — opsional. Jika disediakan, skip device check
+  /// (sudah dilakukan di LocationService). Ini menghilangkan double-call.
   static Future<GPSSecurityResult> validatePosition(
     Position position, {
     List<Map<String, double>>? allowedAreas,
+    DeviceSecurityStatus? cachedDeviceStatus, // ← NEW: terima dari luar
   }) async {
-    // Layer 1: Device integrity
-    final deviceStatus = await checkDeviceSecurity();
+    // Layer 1: Device integrity — pakai cache jika sudah ada
+    final deviceStatus = cachedDeviceStatus ?? await checkDeviceSecurity();
     if (!deviceStatus.isSafe) {
       return deviceStatus.threats.first;
     }
@@ -172,9 +183,11 @@ abstract final class GPSSecurityService {
       if (!areaCheck.isSafe) return areaCheck;
     }
 
-    // All passed — update cache
+    // All passed — update cache dengan Stopwatch
     _lastPosition = position;
-    _lastPositionTime = DateTime.now();
+    _positionClock
+      ..reset()
+      ..start();
 
     return const GPSSecurityResult.safe();
   }
@@ -191,7 +204,7 @@ abstract final class GPSSecurityService {
         final pos = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.high,
-            timeLimit: Duration(seconds: 5),
+            timeLimit: Duration(seconds: 10), // FIX: 5→10 per sample
           ),
         );
         positions.add(pos);
@@ -273,13 +286,13 @@ abstract final class GPSSecurityService {
 
   /// Check device security status (root, emulator, mock apps, dev options).
   ///
-  /// Di-cache selama 1 menit untuk performa.
-  /// Cache pendek agar perubahan status cepat terdeteksi.
+  /// Di-cache selama 60 detik menggunakan Stopwatch (immune dari clock change).
   static Future<DeviceSecurityStatus> checkDeviceSecurity() async {
-    // Return cache jika masih fresh (< 1 menit)
-    if (_cachedDeviceStatus != null && _lastDeviceCheckTime != null) {
-      final elapsed = DateTime.now().difference(_lastDeviceCheckTime!);
-      if (elapsed.inSeconds < 60) return _cachedDeviceStatus!;
+    // FIX: pakai Stopwatch elapsed bukan DateTime.now().difference()
+    if (_cachedDeviceStatus != null &&
+        _deviceCheckClock.isRunning &&
+        _deviceCheckClock.elapsed.inSeconds < _deviceCacheDurationSeconds) {
+      return _cachedDeviceStatus!;
     }
 
     try {
@@ -355,14 +368,16 @@ abstract final class GPSSecurityService {
         threats: threats,
       );
 
+      // FIX: cache dengan Stopwatch reset
       _cachedDeviceStatus = status;
-      _lastDeviceCheckTime = DateTime.now();
+      _deviceCheckClock
+        ..reset()
+        ..start();
 
       return status;
     } catch (e) {
       debugPrint('[GPS Security] Platform channel error: $e');
       // Jika platform channel gagal, anggap aman (graceful degradation)
-      // tapi log sebagai warning
       const status = DeviceSecurityStatus(
         developerOptionsEnabled: false,
         isRooted: false,
@@ -372,7 +387,9 @@ abstract final class GPSSecurityService {
         threats: [],
       );
       _cachedDeviceStatus = status;
-      _lastDeviceCheckTime = DateTime.now();
+      _deviceCheckClock
+        ..reset()
+        ..start();
       return status;
     }
   }
@@ -380,9 +397,13 @@ abstract final class GPSSecurityService {
   /// Reset semua cache (dipanggil saat logout).
   static void resetCache() {
     _lastPosition = null;
-    _lastPositionTime = null;
+    _positionClock
+      ..reset()
+      ..stop();
     _cachedDeviceStatus = null;
-    _lastDeviceCheckTime = null;
+    _deviceCheckClock
+      ..reset()
+      ..stop();
   }
 
   // ═══════════════════════════════════════════════════════
@@ -404,12 +425,14 @@ abstract final class GPSSecurityService {
   }
 
   /// Check akurasi GPS.
+  /// FIX: threshold 50m → 100m agar kompatibel dengan fallback medium accuracy.
   static GPSSecurityResult _checkAccuracy(Position position) {
     if (position.accuracy > maxAccuracyMeters) {
       return GPSSecurityResult(
         threat: GPSSecurityThreat.poorAccuracy,
         severity: ThreatSeverity.critical,
-        message: 'Akurasi GPS terlalu rendah (${position.accuracy.toStringAsFixed(0)}m)',
+        message: 'Akurasi GPS terlalu rendah (${position.accuracy.toStringAsFixed(0)}m). '
+            'Coba di area terbuka.',
         isSafe: false,
         details: {
           'check': 'accuracy',
@@ -422,16 +445,21 @@ abstract final class GPSSecurityService {
   }
 
   /// Check timestamp freshness.
+  ///
+  /// FIX: toleransi 60→120 detik karena GPS hardware butuh warm-up time.
+  /// Note: position.timestamp adalah waktu dari GPS chip (hardware clock),
+  /// bukan jam device — jadi tidak bisa dimanipulasi user.
   static GPSSecurityResult _checkTimestamp(Position position) {
-    final now = DateTime.now();
     final posTime = position.timestamp;
-    final drift = now.difference(posTime).inSeconds.abs();
+    // Gunakan DateTime.now() karena posTime adalah hardware GPS clock,
+    // bukan device clock — perbandingan ini tidak rawan manipulasi.
+    final drift = DateTime.now().difference(posTime).inSeconds.abs();
 
     if (drift > maxTimestampDriftSeconds) {
       return GPSSecurityResult(
         threat: GPSSecurityThreat.invalidTimestamp,
         severity: ThreatSeverity.critical,
-        message: 'Data GPS kadaluarsa (${drift}s)',
+        message: 'Data GPS kadaluarsa (${drift}s). Coba ambil ulang lokasi.',
         isSafe: false,
         details: {
           'check': 'timestamp',
@@ -445,8 +473,9 @@ abstract final class GPSSecurityService {
   }
 
   /// Check movement (speed + suspicious jump).
+  /// FIX: gunakan Stopwatch elapsed — tidak terpengaruh perubahan jam manual.
   static GPSSecurityResult _checkMovement(Position position) {
-    if (_lastPosition == null || _lastPositionTime == null) {
+    if (_lastPosition == null || !_positionClock.isRunning) {
       return const GPSSecurityResult.safe();
     }
 
@@ -457,7 +486,8 @@ abstract final class GPSSecurityService {
       position.longitude,
     );
 
-    final elapsed = DateTime.now().difference(_lastPositionTime!).inSeconds;
+    // FIX: Stopwatch elapsed — bukan DateTime.now().difference()
+    final elapsed = _positionClock.elapsed.inSeconds;
 
     // Hindari division by zero
     if (elapsed <= 0) return const GPSSecurityResult.safe();

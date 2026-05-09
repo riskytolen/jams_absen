@@ -10,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/services/attendance_service.dart';
 import '../../core/services/leave_service.dart';
+import '../../core/services/server_time_service.dart';
 import '../../widgets/common/app_notification.dart';
 
 /// Screen pengajuan & riwayat cuti/izin/sakit.
@@ -1096,7 +1097,7 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
   }
 
   Future<void> _pickDate({required bool isStart}) async {
-    final now = DateTime.now();
+    final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
     final picked = await showDatePicker(
       context: context,
       initialDate: isStart
@@ -1132,7 +1133,7 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
     DateTime? finalSelesai = _tanggalSelesai;
 
     if (_selectedJenis == 'Sakit') {
-      final now = DateTime.now();
+      final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
       finalMulai = now;
       finalSelesai = now;
     }
@@ -1148,7 +1149,7 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
     }
 
     // Validasi: jika tanggal mulai = hari ini, cek apakah sudah absen
-    final today = DateTime.now();
+    final today = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
     final isStartToday = finalMulai.year == today.year &&
         finalMulai.month == today.month &&
         finalMulai.day == today.day;

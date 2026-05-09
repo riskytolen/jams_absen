@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -9,7 +10,9 @@ import '../../core/services/attendance_service.dart';
 import '../../core/services/attendance_realtime_service.dart';
 import '../../core/services/leave_service.dart';
 import '../../core/services/location_service.dart';
+import '../../core/services/server_time_service.dart';
 import '../../core/services/strict_location_validator.dart';
+import '../../core/services/supabase_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -43,13 +46,15 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   bool _hasCheckedIn = false;
   AttendanceInfo? _attendanceInfo;
   late Pegawai _pegawai;
   late AttendanceRealtimeService _realtimeService;
   int _pendingLeaveCount = 0;
   int _announcementCount = 0;
+  Timer? _timeSyncTimer;
 
   // Statistik & aktivitas
   Map<String, int> _stats = {};
@@ -65,20 +70,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _pegawai = widget.pegawai;
     _realtimeService = AttendanceRealtimeService(employeeId: _pegawai.id);
-    _checkTodayAttendance();
+    // Listen lifecycle (resync waktu saat app kembali dari background)
+    WidgetsBinding.instance.addObserver(this);
+    // Inisialisasi: auth sekali, lalu parallel fetch semua data
+    _initDashboard();
+  }
+
+  /// Inisialisasi dashboard dengan single auth check, lalu parallel fetch.
+  Future<void> _initDashboard() async {
+    // 1. Pastikan auth + server time sekali saja
+    await SupabaseService.ensureAuthenticated();
+    await ServerTimeService.initialize();
+
+    // 2. Periodic re-sync waktu setiap 15 menit
+    _timeSyncTimer = Timer.periodic(const Duration(minutes: 15), (_) {
+      ServerTimeService.resync();
+    });
+
+    // 3. Parallel fetch semua data (auth sudah cached 30 detik)
+    await Future.wait([
+      _checkTodayAttendance(),
+      _fetchPendingLeaveCount(),
+      _fetchAnnouncementCount(),
+      _fetchStatsAndActivity(),
+      _fetchActiveSP(),
+      _refreshPegawaiData(),
+    ]);
+
+    // 4. Setup realtime SETELAH initial data loaded
     _setupRealtimeListener();
-    _fetchPendingLeaveCount();
-    _fetchAnnouncementCount();
-    _fetchStatsAndActivity();
-    _fetchActiveSP();
     _checkForceUpdate();
-    _refreshPegawaiData();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timeSyncTimer?.cancel();
+    _realtimeService.onStatsChanged.removeListener(_onStatsChangedFromRealtime);
     _realtimeService.dispose();
     super.dispose();
+  }
+
+  /// Re-sync waktu server saat app kembali dari background.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('[Dashboard] App resumed, re-syncing server time...');
+      ServerTimeService.resync();
+    }
   }
 
   /// Setup realtime listener untuk auto-update data absensi.
@@ -86,8 +125,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Listen ke perubahan data
     _realtimeService.onDataChanged.addListener(_onAttendanceDataChanged);
     
+    // Listen ke perubahan stats (auto-refresh saat INSERT/UPDATE/DELETE)
+    _realtimeService.onStatsChanged.addListener(_onStatsChangedFromRealtime);
+    
     // Subscribe ke realtime channel
     _realtimeService.subscribe();
+  }
+
+  /// Auto-refresh stats saat realtime mendeteksi perubahan.
+  void _onStatsChangedFromRealtime() {
+    if (mounted) {
+      _fetchStatsAndActivity();
+    }
   }
 
   /// Callback saat data absensi berubah dari realtime.
@@ -130,8 +179,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           );
         });
 
-        // Refresh statistik setelah data absen berubah
-        _fetchStatsAndActivity();
+        // Stats refresh sudah ditangani oleh onStatsChanged listener
       } catch (e) {
         debugPrint('[Dashboard] Error parsing realtime data: $e');
       }
@@ -224,7 +272,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Hitung periode aktif (tgl 8 — tgl 7).
   Map<String, String> get _currentPeriod {
-    final now = DateTime.now();
+    final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
     final DateTime start;
     final DateTime end;
     if (now.day >= 8) {
@@ -240,7 +288,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   String get _periodLabel {
-    final now = DateTime.now();
+    final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
     final DateTime start;
     final DateTime end;
     if (now.day >= 8) {
@@ -262,7 +310,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Hitung periode sebelumnya (1 bulan sebelum periode aktif).
   Map<String, String> get _previousPeriod {
-    final now = DateTime.now();
+    final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
     final DateTime start;
     final DateTime end;
     if (now.day >= 8) {
@@ -476,7 +524,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   static String _formatRelativeDate(DateTime date) {
-    final now = DateTime.now();
+    final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final target = DateTime(date.year, date.month, date.day);
     final diff = today.difference(target).inDays;
@@ -1781,7 +1829,7 @@ class _SPWarningBannerState extends State<_SPWarningBanner> {
     String? sisaHari;
     if (tanggalBerakhir != null) {
       final end = DateTime.parse(tanggalBerakhir);
-      final diff = end.difference(DateTime.now()).inDays;
+      final diff = end.difference(ServerTimeService.getEstimatedServerTime() ?? DateTime.now()).inDays;
       if (diff > 0) sisaHari = '$diff hari lagi';
     }
 

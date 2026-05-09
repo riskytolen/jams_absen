@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:package_info_plus/package_info_plus.dart';
+import '../../core/utils/app_version.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/sound_service.dart';
@@ -28,7 +28,6 @@ class _LoginScreenState extends State<LoginScreen>
   // ── State ──
   bool _isLoading = false;
   String? _loadingMessage;
-  String _appVersion = '';
 
   // ── Entrance animations ──
   late final AnimationController _fadeCtrl;
@@ -77,12 +76,6 @@ class _LoginScreenState extends State<LoginScreen>
 
     _fadeCtrl.forward();
     _slideCtrl.forward();
-    _loadAppVersion();
-  }
-
-  Future<void> _loadAppVersion() async {
-    final info = await PackageInfo.fromPlatform();
-    if (mounted) setState(() => _appVersion = info.version);
   }
 
   @override
@@ -655,7 +648,7 @@ class _LoginScreenState extends State<LoginScreen>
     return Column(
       children: [
         Text(
-          'Jams Attendance v$_appVersion',
+          'Jams Attendance ${AppVersion.label}',
           style: AppTextStyles.onDarkMuted.copyWith(
             color: Colors.white.withValues(alpha: 0.35),
             fontSize: 12,

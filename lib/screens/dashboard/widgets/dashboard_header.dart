@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/greeting_helper.dart';
+import '../../../core/services/server_time_service.dart';
 
 /// Data absensi untuk ditampilkan di header.
 class AttendanceInfo {
@@ -288,7 +289,7 @@ class _MainCard extends StatefulWidget {
 
 class _MainCardState extends State<_MainCard> {
   late Timer _timer;
-  DateTime _now = DateTime.now();
+  DateTime _now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
 
   static final _timeFormat = DateFormat('HH:mm');
   static final _secFormat = DateFormat('ss');
@@ -298,7 +299,11 @@ class _MainCardState extends State<_MainCard> {
   void initState() {
     super.initState();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _now = DateTime.now());
+      if (mounted) {
+        setState(() {
+          _now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
+        });
+      }
     });
   }
 

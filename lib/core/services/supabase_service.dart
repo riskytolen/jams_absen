@@ -49,12 +49,36 @@ abstract final class SupabaseService {
   /// User yang sedang login, atau null.
   static User? get currentUser => auth.currentUser;
 
+  /// Stopwatch monotonic untuk auth cache (anti-manipulasi jam HP).
+  static final Stopwatch _authStopwatch = Stopwatch()..start();
+
+  /// Elapsed saat auth terakhir berhasil.
+  static Duration? _lastAuthElapsed;
+
+  /// Durasi cache auth check (30 detik).
+  static const _authCacheDuration = Duration(seconds: 30);
+
   /// Pastikan sudah ter-autentikasi. Panggil sebelum operasi database
   /// yang membutuhkan RLS.
   ///
   /// Jika session expired atau belum ada, otomatis sign in ulang.
+  /// Menggunakan cache 30 detik (monotonic) untuk menghindari pengecekan berulang.
   static Future<void> ensureAuthenticated() async {
+    // Skip jika baru saja dicek dan session masih ada
+    if (_lastAuthElapsed != null &&
+        auth.currentSession != null &&
+        (_authStopwatch.elapsed - _lastAuthElapsed!) < _authCacheDuration) {
+      return;
+    }
     await _ensureAuthenticated();
+    _lastAuthElapsed = _authStopwatch.elapsed;
+  }
+
+  /// Force re-check auth tanpa cache (untuk kasus penting seperti submit).
+  static Future<void> forceEnsureAuthenticated() async {
+    _lastAuthElapsed = null;
+    await _ensureAuthenticated();
+    _lastAuthElapsed = _authStopwatch.elapsed;
   }
 
   /// Sign out dari Supabase Auth.
