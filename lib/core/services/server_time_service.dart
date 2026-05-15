@@ -4,6 +4,10 @@ import 'supabase_service.dart';
 
 /// Service untuk mendapatkan waktu dari server/internet (ANTI-MANIPULASI).
 ///
+/// Semua waktu yang dikembalikan ber-zona **WIB (UTC+7)** dan TIDAK tergantung
+/// pengaturan timezone HP user. Ini penting karena hitung status absensi
+/// (telat/tepat waktu) WAJIB konsisten WIB walau HP user di set zona lain.
+///
 /// Menggunakan **Stopwatch (monotonic clock)** untuk mengukur waktu berlalu,
 /// bukan `DateTime.now()`. Stopwatch di Dart menggunakan system monotonic clock
 /// yang **TIDAK TERPENGARUH** perubahan jam HP manual oleh user.
@@ -16,8 +20,24 @@ import 'supabase_service.dart';
 ///
 /// **PENTING**: Service ini TIDAK pernah fallback ke DateTime.now()
 /// untuk operasi time-critical (absensi, validasi, dll).
-/// DateTime.now() hanya digunakan sebagai tampilan non-kritis TERAKHIR.
 abstract final class ServerTimeService {
+  // ═══════════════════════════════════════════════════════
+  //  KONSTANTA
+  // ═══════════════════════════════════════════════════════
+
+  /// Offset zona Indonesia Barat dari UTC.
+  static const Duration _wibOffset = Duration(hours: 7);
+
+  /// Batas atas waktu yang masih masuk akal untuk anchor.
+  /// Reject anchor sebelum batas ini (mencegah bug epoch / 1900 / 1970).
+  static final DateTime _minSane = DateTime.utc(2024, 1, 1);
+
+  /// Batas bawah waktu yang masih masuk akal (10 tahun ke depan).
+  static final DateTime _maxSane = DateTime.utc(2040, 1, 1);
+
+  /// Skip re-sync jika anchor masih lebih baru dari ini.
+  static const Duration _resyncCooldown = Duration(seconds: 30);
+
   // ═══════════════════════════════════════════════════════
   //  MONOTONIC CLOCK (anti-manipulasi)
   // ═══════════════════════════════════════════════════════
@@ -25,9 +45,9 @@ abstract final class ServerTimeService {
   /// Stopwatch monotonic — tidak terpengaruh perubahan jam HP.
   static final Stopwatch _monotonic = Stopwatch();
 
-  /// Waktu server yang di-anchor ke monotonic clock.
-  /// Waktu server = _anchoredServerTime + _monotonic.elapsed - _anchorElapsed
-  static DateTime? _anchoredServerTime;
+  /// Waktu server (UTC) yang di-anchor ke monotonic clock.
+  /// Disimpan dalam UTC untuk menghindari ambiguitas timezone.
+  static DateTime? _anchoredUtc;
 
   /// Elapsed saat anchor di-set.
   static Duration _anchorElapsed = Duration.zero;
@@ -35,11 +55,14 @@ abstract final class ServerTimeService {
   /// Flag apakah sudah pernah berhasil sync.
   static bool _synced = false;
 
+  /// Sedang sync (mencegah concurrent sync racing).
+  static Future<void>? _syncInFlight;
+
   // ═══════════════════════════════════════════════════════
   //  CACHE
   // ═══════════════════════════════════════════════════════
 
-  /// Cache tanggal server.
+  /// Cache tanggal server (WIB).
   static String? _cachedDate;
   static Duration _dateCacheAnchor = Duration.zero;
   static const _dateCacheDuration = Duration(minutes: 5);
@@ -69,14 +92,10 @@ abstract final class ServerTimeService {
     }
   }
 
-  /// Ambil waktu server yang akurat.
+  /// Ambil waktu server WIB yang akurat.
   ///
-  /// Prioritas:
-  /// 1. Jika sudah sync & Stopwatch jalan → hitung dari anchor (TANPA network)
-  /// 2. Jika belum sync → fetch dari network (NTP/Supabase)
-  ///
-  /// Returns DateTime dalam timezone lokal.
-  /// Throws [ServerTimeException] jika semua metode gagal.
+  /// Returns DateTime dalam zona WIB (UTC+7), TANPA bergantung
+  /// timezone HP user.
   static Future<DateTime> getServerTime() async {
     // Jika belum pernah sync, lakukan sync dulu
     if (!_synced) {
@@ -85,26 +104,62 @@ abstract final class ServerTimeService {
 
     // Jika sudah sync, gunakan monotonic estimation (cepat, tanpa network)
     if (_synced) {
-      return _getMonotonicEstimate();
+      return _getMonotonicEstimateWib();
     }
 
     // Fallback terakhir — HANYA jika benar-benar belum pernah sync
     debugPrint(
-        '[ServerTimeService] ⚠️ CRITICAL: No server time, using local!');
-    return DateTime.now();
+        '[ServerTimeService] ⚠️ CRITICAL: No server time, using local UTC->WIB!');
+    return DateTime.now().toUtc().add(_wibOffset);
+  }
+
+  /// Ambil waktu server WIB FRESH untuk operasi KRITIS (absensi).
+  ///
+  /// Selalu force re-sync (kecuali baru sync detik tadi) sebelum return.
+  /// Returns DateTime dalam zona WIB.
+  static Future<DateTime> getServerTimeForCriticalOps() async {
+    try {
+      // Force re-sync untuk operasi kritis
+      await _syncTime(forceRefresh: true);
+      if (_synced) {
+        return _getMonotonicEstimateWib();
+      }
+      // Jika sync gagal, fallback ke getServerTime biasa
+      return await getServerTime();
+    } catch (e) {
+      debugPrint('[ServerTimeService] Critical ops failed: $e');
+      return await getServerTime();
+    }
   }
 
   /// Estimasi waktu server INSTAN menggunakan monotonic clock.
   ///
   /// Gunakan untuk UI yang perlu update cepat (jam digital, greeting).
   /// TIDAK melakukan network call.
-  /// Return null jika belum pernah sync.
+  /// Return null jika belum pernah sync atau data tidak valid.
   static DateTime? getEstimatedServerTime() {
-    if (!_synced) return null;
-    return _getMonotonicEstimate();
+    if (!_synced || _anchoredUtc == null) {
+      return null;
+    }
+
+    try {
+      final est = _getMonotonicEstimateWib();
+      // Sanity guard tambahan untuk UI: tolak nilai gila.
+      if (est.isBefore(_minSane) || est.isAfter(_maxSane)) {
+        debugPrint(
+            '[ServerTimeService] getEstimatedServerTime: insane $est, return null');
+        // Reset anchor agar sync ulang.
+        _resetAnchor();
+        return null;
+      }
+      return est;
+    } catch (e) {
+      debugPrint('[ServerTimeService] getEstimatedServerTime error: $e');
+      return null;
+    }
   }
 
-  /// Ambil tanggal server (YYYY-MM-DD), dengan cache 5 menit.
+  /// Ambil tanggal server (YYYY-MM-DD) berdasarkan WIB, dengan cache 5 menit.
   static Future<String> getServerDate() async {
     // Cek cache — gunakan monotonic elapsed untuk durasi
     if (_cachedDate != null) {
@@ -121,7 +176,7 @@ abstract final class ServerTimeService {
     return _cachedDate!;
   }
 
-  /// Ambil jam server terformat (HH:mm:ss).
+  /// Ambil jam server WIB terformat (HH:mm:ss).
   static Future<String> getServerTimeFormatted() async {
     final t = await getServerTime();
     return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';
@@ -130,22 +185,17 @@ abstract final class ServerTimeService {
   /// Apakah sudah pernah berhasil sync waktu server?
   static bool get isInitialized => _synced;
 
-  /// Offset antara server dan lokal (ms) — untuk debugging saja.
+  /// Offset antara server dan jam HP (ms) — untuk debugging saja.
   static int get offsetMs {
-    if (!_synced) return 0;
-    final estimated = _getMonotonicEstimate();
-    return estimated.difference(DateTime.now()).inMilliseconds;
+    if (!_synced || _anchoredUtc == null) return 0;
+    final estimated = _getMonotonicEstimateUtc();
+    return estimated.difference(DateTime.now().toUtc()).inMilliseconds;
   }
 
   /// Force re-sync waktu dari internet/server.
-  ///
-  /// Panggil saat:
-  /// - App kembali dari background
-  /// - Sebelum operasi kritikal (submit absen)
-  /// - Setiap 15-30 menit sebagai maintenance
   static Future<void> resync() async {
     try {
-      await _syncTime();
+      await _syncTime(forceRefresh: true);
       debugPrint('[ServerTimeService] Re-synced successfully');
     } catch (e) {
       debugPrint('[ServerTimeService] Re-sync failed: $e');
@@ -155,9 +205,7 @@ abstract final class ServerTimeService {
   /// Reset (untuk testing).
   @visibleForTesting
   static void resetCache() {
-    _anchoredServerTime = null;
-    _anchorElapsed = Duration.zero;
-    _synced = false;
+    _resetAnchor();
     _rpcAvailable = true;
     _cachedDate = null;
     _dateCacheAnchor = Duration.zero;
@@ -170,36 +218,61 @@ abstract final class ServerTimeService {
   //  MONOTONIC ESTIMATION (inti anti-manipulasi)
   // ═══════════════════════════════════════════════════════
 
-  /// Hitung estimasi waktu server menggunakan monotonic clock.
-  ///
-  /// Formula: serverTime = anchoredServerTime + (currentElapsed - anchorElapsed)
-  ///
-  /// Ini TIDAK terpengaruh perubahan jam HP karena:
-  /// - _monotonic.elapsed menggunakan system uptime counter
-  /// - _anchoredServerTime adalah snapshot dari network time
-  /// - Selisihnya dihitung murni dari monotonic elapsed
-  static DateTime _getMonotonicEstimate() {
+  /// Hitung estimasi waktu server (UTC) menggunakan monotonic clock.
+  static DateTime _getMonotonicEstimateUtc() {
+    if (_anchoredUtc == null) {
+      throw StateError('No anchored server time available');
+    }
     final elapsed = _monotonic.elapsed - _anchorElapsed;
-    return _anchoredServerTime!.add(elapsed);
+    return _anchoredUtc!.add(elapsed);
+  }
+
+  /// Hitung estimasi waktu server WIB dari anchor UTC.
+  static DateTime _getMonotonicEstimateWib() {
+    final utc = _getMonotonicEstimateUtc();
+    return utc.add(_wibOffset);
   }
 
   /// Anchor (simpan) waktu server ke monotonic clock.
-  static void _anchor(DateTime serverTime) {
-    _anchoredServerTime = serverTime;
+  ///
+  /// [serverTimeUtc] HARUS dalam UTC untuk menghindari ambiguitas.
+  /// Tolak (no-op) kalau waktu tidak masuk akal.
+  static bool _anchor(DateTime serverTimeUtc) {
+    // Pastikan UTC.
+    final utc =
+        serverTimeUtc.isUtc ? serverTimeUtc : serverTimeUtc.toUtc();
+
+    // Sanity check — tolak kalau di luar range masuk akal
+    if (utc.isBefore(_minSane) || utc.isAfter(_maxSane)) {
+      debugPrint(
+          '[ServerTimeService] ⚠️ Reject anchor: out-of-range $utc');
+      return false;
+    }
+
+    _anchoredUtc = utc;
     _anchorElapsed = _monotonic.elapsed;
     _synced = true;
 
     // Log perbedaan vs jam HP untuk deteksi manipulasi
-    final localNow = DateTime.now();
+    final localUtcNow = DateTime.now().toUtc();
     final diffMinutes =
-        serverTime.difference(localNow).inMilliseconds.abs() / 60000;
+        utc.difference(localUtcNow).inMilliseconds.abs() / 60000;
     if (diffMinutes > 2) {
       debugPrint(
-          '[ServerTimeService] ⚠️ MANIPULASI TERDETEKSI! '
-          'Selisih: ${diffMinutes.toStringAsFixed(1)} menit');
+          '[ServerTimeService] ⚠️ Drift HP terdeteksi: '
+          '${diffMinutes.toStringAsFixed(1)} menit');
       debugPrint(
-          '[ServerTimeService] Server: $serverTime | HP: $localNow');
+          '[ServerTimeService] Server UTC: $utc | HP UTC: $localUtcNow');
     }
+    return true;
+  }
+
+  /// Reset anchor (untuk recovery dari corrupted state).
+  static void _resetAnchor() {
+    _anchoredUtc = null;
+    _anchorElapsed = Duration.zero;
+    _synced = false;
+    _cachedDate = null;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -207,16 +280,43 @@ abstract final class ServerTimeService {
   // ═══════════════════════════════════════════════════════
 
   /// Sync waktu dari berbagai sumber.
-  static Future<void> _syncTime() async {
+  ///
+  /// [forceRefresh] memaksa fetch ulang walau sudah sync recent.
+  /// Tanpa forceRefresh: skip kalau sync terakhir < 30 detik lalu.
+  static Future<void> _syncTime({bool forceRefresh = false}) async {
     // Pastikan monotonic jalan
     if (!_monotonic.isRunning) _monotonic.start();
 
+    // Jika sync terakhir masih hangat & bukan forceRefresh → skip.
+    if (!forceRefresh && _synced) {
+      final since = _monotonic.elapsed - _anchorElapsed;
+      if (since < _resyncCooldown) {
+        return;
+      }
+    }
+
+    // Coalesce concurrent sync calls.
+    final inFlight = _syncInFlight;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+
+    final completer = _doSync();
+    _syncInFlight = completer;
+    try {
+      await completer;
+    } finally {
+      _syncInFlight = null;
+    }
+  }
+
+  static Future<void> _doSync() async {
     // Metode 1: NTP (paling akurat, langsung dari internet)
     try {
-      final ntpTime = await _fetchNtpTime();
-      if (ntpTime != null) {
-        _anchor(ntpTime);
-        debugPrint('[ServerTimeService] Synced via NTP: $ntpTime');
+      final ntpUtc = await _fetchNtpTimeUtc();
+      if (ntpUtc != null && _anchor(ntpUtc)) {
+        debugPrint('[ServerTimeService] Synced via NTP (UTC): $ntpUtc');
         return;
       }
     } catch (e) {
@@ -230,12 +330,14 @@ abstract final class ServerTimeService {
         final response =
             await SupabaseService.client.rpc('get_server_time');
         if (response != null) {
-          final serverTime =
-              DateTime.parse(response.toString()).toLocal();
-          _anchor(serverTime);
-          debugPrint(
-              '[ServerTimeService] Synced via Supabase RPC: $serverTime');
-          return;
+          // Parse SEBAGAI UTC (Postgres now() return timestamptz UTC dari supabase).
+          final parsed = DateTime.parse(response.toString());
+          final utc = parsed.isUtc ? parsed : parsed.toUtc();
+          if (_anchor(utc)) {
+            debugPrint(
+                '[ServerTimeService] Synced via Supabase RPC (UTC): $utc');
+            return;
+          }
         }
       } catch (e) {
         if (e.toString().contains('PGRST202') ||
@@ -262,12 +364,13 @@ abstract final class ServerTimeService {
           .single();
 
       if (response['last_sync'] != null) {
-        final serverTime =
-            DateTime.parse(response['last_sync'] as String).toLocal();
-        _anchor(serverTime);
-        debugPrint(
-            '[ServerTimeService] Synced via time_sync: $serverTime');
-        return;
+        final parsed = DateTime.parse(response['last_sync'] as String);
+        final utc = parsed.isUtc ? parsed : parsed.toUtc();
+        if (_anchor(utc)) {
+          debugPrint(
+              '[ServerTimeService] Synced via time_sync (UTC): $utc');
+          return;
+        }
       }
     } catch (e) {
       debugPrint('[ServerTimeService] time_sync failed: $e');
@@ -289,13 +392,8 @@ abstract final class ServerTimeService {
   //  NTP — Direct internet time (tanpa Supabase)
   // ═══════════════════════════════════════════════════════
 
-  /// Fetch waktu dari NTP server.
-  ///
-  /// NTP (Network Time Protocol) memberikan waktu UTC yang sangat akurat
-  /// langsung dari server waktu internet. Tidak tergantung Supabase.
-  ///
-  /// Menggunakan raw UDP socket ke pool.ntp.org.
-  static Future<DateTime?> _fetchNtpTime() async {
+  /// Fetch waktu dari NTP server. Return UTC, atau null kalau gagal.
+  static Future<DateTime?> _fetchNtpTimeUtc() async {
     const ntpServers = [
       'pool.ntp.org',
       'time.google.com',
@@ -315,7 +413,7 @@ abstract final class ServerTimeService {
     return null;
   }
 
-  /// Query satu NTP server via UDP.
+  /// Query satu NTP server via UDP. Return UTC, atau null.
   ///
   /// NTP packet format (simplified):
   /// - 48 bytes request
@@ -340,12 +438,14 @@ abstract final class ServerTimeService {
       socket.send(request, addresses.first, 123);
 
       // Tunggu response
-      await for (final event in socket.timeout(const Duration(seconds: 3))) {
+      await for (final event
+          in socket.timeout(const Duration(seconds: 3))) {
         if (event == RawSocketEvent.read) {
           final datagram = socket.receive();
           if (datagram != null && datagram.data.length >= 48) {
-            // Parse Transmit Timestamp (bytes 40-43: seconds, 44-47: fraction)
             final data = datagram.data;
+
+            // Parse Transmit Timestamp (bytes 40-43: seconds, 44-47: fraction)
             final seconds = (data[40] << 24) |
                 (data[41] << 16) |
                 (data[42] << 8) |
@@ -356,20 +456,48 @@ abstract final class ServerTimeService {
                 (data[46] << 8) |
                 data[47];
 
+            socket.close();
+
+            // ═══════════════════════════════════════════
+            //  VALIDASI NTP RESPONSE (anti-bug 1900)
+            // ═══════════════════════════════════════════
+            // Reject jika seconds = 0 (kratos packet / not a NTP reply)
+            if (seconds == 0) {
+              debugPrint(
+                  '[NTP] $server returned seconds=0 (invalid)');
+              return null;
+            }
+
             // NTP epoch = 1 Jan 1900, Unix epoch = 1 Jan 1970
             // Selisih = 70 tahun = 2208988800 detik
             const ntpEpochOffset = 2208988800;
             final unixSeconds = seconds - ntpEpochOffset;
+
+            // Reject jika negative (artinya seconds < epoch offset → invalid)
+            if (unixSeconds <= 0) {
+              debugPrint(
+                  '[NTP] $server returned negative unixSeconds=$unixSeconds');
+              return null;
+            }
+
+            // Reject jika sebelum 2024 (waktu kompilasi minimum yang masuk akal)
+            // dan sesudah 2040 (jauh ke depan).
+            const min2024 = 1704067200; // 2024-01-01 UTC
+            const max2040 = 2208988800; // 2040-01-01 UTC kira-kira
+            if (unixSeconds < min2024 || unixSeconds > max2040) {
+              debugPrint(
+                  '[NTP] $server returned out-of-range unixSeconds=$unixSeconds');
+              return null;
+            }
+
             final milliseconds =
                 (fraction * 1000 / 0x100000000).round();
 
-            final ntpTime = DateTime.fromMillisecondsSinceEpoch(
+            // Return sebagai UTC murni (bukan toLocal!)
+            return DateTime.fromMillisecondsSinceEpoch(
               unixSeconds * 1000 + milliseconds,
               isUtc: true,
-            ).toLocal();
-
-            socket.close();
-            return ntpTime;
+            );
           }
         }
       }

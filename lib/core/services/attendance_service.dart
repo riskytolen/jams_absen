@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 
 import 'location_service.dart';
 import 'server_time_service.dart';
+import 'session_service.dart';
 import 'supabase_service.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -349,6 +350,11 @@ abstract final class AttendanceService {
 
   /// Hitung status kehadiran berdasarkan jam masuk dan jadwal.
   ///
+  /// **Penting:** [checkInTime] HARUS dalam zona waktu yang sama dengan
+  /// [scheduleJamMasuk]. Untuk app ini, keduanya WAJIB WIB (UTC+7).
+  /// Gunakan [ServerTimeService.getServerTime] / [getServerTimeForCriticalOps]
+  /// yang sudah selalu mengembalikan DateTime WIB.
+  ///
   /// Returns Map dengan keys:
   /// - `status`: 'Hadir' atau 'Terlambat'
   /// - `durasi_telat`: durasi keterlambatan dalam menit (0 jika tepat waktu)
@@ -362,7 +368,9 @@ abstract final class AttendanceService {
     final scheduleHour = int.parse(parts[0]);
     final scheduleMinute = int.parse(parts[1]);
 
-    // Buat DateTime untuk jadwal masuk hari ini
+    // Buat DateTime untuk jadwal masuk hari ini.
+    // checkInTime sudah dalam representasi WIB sehingga year/month/day
+    // mengikuti tanggal WIB.
     final scheduleTime = DateTime(
       checkInTime.year,
       checkInTime.month,
@@ -375,6 +383,13 @@ abstract final class AttendanceService {
     final batasToleransi = scheduleTime.add(
       Duration(minutes: toleransiMenit),
     );
+
+    // Defensive log untuk debugging insiden telat-padahal-tidak.
+    debugPrint(
+        '[AttendanceService] calc: checkIn=$checkInTime '
+        'schedule=$scheduleTime batasToleransi=$batasToleransi '
+        'isAfterBatas=${checkInTime.isAfter(batasToleransi)} '
+        'isBeforeSchedule=${checkInTime.isBefore(scheduleTime)}');
 
     // Hitung selisih waktu
     if (checkInTime.isAfter(batasToleransi)) {
@@ -405,7 +420,7 @@ abstract final class AttendanceService {
   /// Flow:
   /// 1. Cek duplikat (sudah absen hari ini?)
   /// 2. Ambil jadwal divisi
-  /// 3. Ambil waktu server (tidak bisa dimanipulasi!)
+  /// 3. Ambil waktu server WIB yang akurat (tidak bisa dimanipulasi!)
   /// 4. Hitung status kehadiran
   /// 5. Insert record ke database
   ///
@@ -418,17 +433,31 @@ abstract final class AttendanceService {
     String? catatan,
   }) async {
     try {
+      // Update session activity - ini operasi penting
+      SessionService.updateActivity();
+      
       // Force auth check SEKALI di awal — semua internal call skip auth
       await SupabaseService.forceEnsureAuthenticated();
 
-      // Ambil waktu server SEKALI — gunakan untuk semua kebutuhan
-      final now = await ServerTimeService.getServerTime();
-      debugPrint('[AttendanceService] Waktu server untuk absensi: $now');
+      // Ambil waktu server WIB yang FRESH untuk operasi kritis
+      final now = await ServerTimeService.getServerTimeForCriticalOps();
+      debugPrint('[AttendanceService] Waktu server WIB untuk absensi: $now');
+
+      // Sanity check: tolak waktu jelas-jelas invalid (mis. <2024 / >2040)
+      // Mencegah edge case 1900 epoch / clock corruption merembet ke DB.
+      if (now.year < 2024 || now.year > 2040) {
+        throw AttendanceException(
+          type: AttendanceErrorType.unknown,
+          message:
+              'Waktu server tidak valid ($now). Coba ulang beberapa saat lagi atau '
+              'pastikan koneksi internet stabil.',
+        );
+      }
 
       final tanggal =
           '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-      // 1. Cek apakah sudah absen hari ini (gunakan tanggal dari server time)
+      // 1. Cek apakah sudah absen hari ini (gunakan tanggal dari server time WIB)
       final existingRecord = await SupabaseService.client
           .from('attendance_records')
           .select('id')
@@ -461,15 +490,22 @@ abstract final class AttendanceService {
         );
       }
 
-      // 3. Hitung status kehadiran
+      // 3. Hitung status kehadiran menggunakan waktu WIB yang konsisten
       final jamMasukStr = schedule['jam_masuk'] as String;
       final toleransiMenit = schedule['toleransi_menit'] as int;
 
       final statusResult = calculateAttendanceStatus(
-        checkInTime: now,
+        checkInTime: now, // Waktu WIB yang sudah konsisten
         scheduleJamMasuk: jamMasukStr,
         toleransiMenit: toleransiMenit,
       );
+
+      debugPrint('[AttendanceService] Status calculation:');
+      debugPrint('  - Check-in time (WIB): $now');
+      debugPrint('  - Schedule jam masuk: $jamMasukStr');
+      debugPrint('  - Toleransi: $toleransiMenit menit');
+      debugPrint('  - Result status: ${statusResult['status']}');
+      debugPrint('  - Durasi telat: ${statusResult['durasi_telat']} menit');
 
       // 4. Ambil lokasi divisi untuk mendapatkan location_id
       final locations = await getDivisionLocations(divisionId);
@@ -492,6 +528,8 @@ abstract final class AttendanceService {
         'location_id': primaryLocation['id'],
         'catatan': catatan,
       };
+
+      debugPrint('[AttendanceService] Record to insert: $record');
 
       // 6. Insert ke database
       final response = await SupabaseService.client
