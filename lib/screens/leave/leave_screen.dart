@@ -1375,44 +1375,6 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
               ),
               const SizedBox(height: 18),
 
-              // Banner khusus Sakit (info lampiran wajib + boleh backdate)
-              if (_selectedJenis == 'Sakit') ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDC2626).withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: const Color(0xFFDC2626).withValues(alpha: 0.2),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(
-                        Icons.info_outline_rounded,
-                        color: Color(0xFFDC2626),
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Pilih durasi sakit (boleh beberapa hari sekaligus). Surat dokter wajib dilampirkan.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: const Color(0xFFDC2626),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-
               // Date pickers (range untuk semua jenis)
               Row(
                 children: [
