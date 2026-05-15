@@ -85,5 +85,23 @@ void main() {
       expect(result['status'], 'Hadir');
       expect(result['durasi_telat'], 0);
     });
+
+    test('Regression: checkInTime dari UTC isUtc=true tidak boleh menyebabkan offset 7 jam', () {
+      // Bug nyata 2026-05-15 ID57200: jam_masuk 10:36, schedule 10:00, tol 5
+      // tercatat telat 456 menit (= 36 + 7*60 = ada offset 7 jam tersembunyi).
+      // Penyebab: checkInTime dari ServerTimeService punya isUtc=true sehingga
+      // .difference(scheduleTime-yang-naive) menambah 7 jam.
+      // Setelah fix: checkInTime selalu naive (jam dinding WIB).
+      final naiveWib = DateTime(2026, 5, 15, 10, 36, 33);
+      expect(naiveWib.isUtc, false);
+
+      final result = AttendanceService.calculateAttendanceStatus(
+        checkInTime: naiveWib,
+        scheduleJamMasuk: '10:00:00',
+        toleransiMenit: 5,
+      );
+      expect(result['status'], 'Terlambat');
+      expect(result['durasi_telat'], 36, reason: 'Harus 36 menit, BUKAN 456');
+    });
   });
 }

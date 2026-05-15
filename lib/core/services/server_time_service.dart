@@ -110,7 +110,7 @@ abstract final class ServerTimeService {
     // Fallback terakhir — HANYA jika benar-benar belum pernah sync
     debugPrint(
         '[ServerTimeService] ⚠️ CRITICAL: No server time, using local UTC->WIB!');
-    return DateTime.now().toUtc().add(_wibOffset);
+    return _toNaiveWib(DateTime.now().toUtc().add(_wibOffset));
   }
 
   /// Ambil waktu server WIB FRESH untuk operasi KRITIS (absensi).
@@ -228,9 +228,26 @@ abstract final class ServerTimeService {
   }
 
   /// Hitung estimasi waktu server WIB dari anchor UTC.
+  ///
+  /// Mengembalikan DateTime **NAIVE/LOCAL** (isUtc=false) yang nilai
+  /// year/month/day/hour/minute-nya merepresentasikan jam dinding WIB.
+  /// Ini penting agar bisa langsung dibandingkan dengan
+  /// `DateTime(year, month, day, h, m)` (yang juga naive/local) tanpa
+  /// terjadi konversi timezone tersembunyi saat `.difference()` /
+  /// `.isAfter()`.
   static DateTime _getMonotonicEstimateWib() {
     final utc = _getMonotonicEstimateUtc();
-    return utc.add(_wibOffset);
+    return _toNaiveWib(utc.add(_wibOffset));
+  }
+
+  /// Konversi DateTime (UTC dengan offset WIB sudah ditambahkan, atau naive)
+  /// menjadi DateTime naive yang nilainya = jam dinding WIB.
+  static DateTime _toNaiveWib(DateTime t) {
+    return DateTime(
+      t.year, t.month, t.day,
+      t.hour, t.minute, t.second,
+      t.millisecond, t.microsecond,
+    );
   }
 
   /// Anchor (simpan) waktu server ke monotonic clock.
