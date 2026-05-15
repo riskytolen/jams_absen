@@ -1098,12 +1098,17 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
 
   Future<void> _pickDate({required bool isStart}) async {
     final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
+    // Sakit boleh backdate maks 14 hari (kasus rawat inap, baru lapor setelah pulih).
+    // Izin & Cuti harus dari hari ini ke depan.
+    final firstDate = _selectedJenis == 'Sakit'
+        ? now.subtract(const Duration(days: 14))
+        : now;
     final picked = await showDatePicker(
       context: context,
       initialDate: isStart
           ? (_tanggalMulai ?? now)
           : (_tanggalSelesai ?? _tanggalMulai ?? now),
-      firstDate: now,
+      firstDate: firstDate,
       lastDate: DateTime(now.year + 1),
       builder: (context, child) {
         return Theme(
@@ -1129,14 +1134,8 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
   }
 
   Future<void> _submit() async {
-    DateTime? finalMulai = _tanggalMulai;
-    DateTime? finalSelesai = _tanggalSelesai;
-
-    if (_selectedJenis == 'Sakit') {
-      final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
-      finalMulai = now;
-      finalSelesai = now;
-    }
+    final DateTime? finalMulai = _tanggalMulai;
+    final DateTime? finalSelesai = _tanggalSelesai;
 
     if (finalMulai == null || finalSelesai == null) {
       AppNotification.show(
@@ -1148,13 +1147,25 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
       return;
     }
 
-    // Validasi: jika tanggal mulai = hari ini, cek apakah sudah absen
-    final today = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
-    final isStartToday = finalMulai.year == today.year &&
-        finalMulai.month == today.month &&
-        finalMulai.day == today.day;
+    if (finalSelesai.isBefore(finalMulai)) {
+      AppNotification.show(
+        context,
+        type: NotificationType.warning,
+        title: 'Tanggal Tidak Valid',
+        message: 'Tanggal selesai harus sama atau setelah tanggal mulai',
+      );
+      return;
+    }
 
-    if (isStartToday) {
+    // Validasi: jika range pengajuan mencakup hari ini, cek apakah sudah absen.
+    // Termasuk untuk Sakit yang di-backdate (mulai kemarin → selesai hari ini).
+    final today = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
+    final todayDateOnly = DateTime(today.year, today.month, today.day);
+    final mulaiDateOnly = DateTime(finalMulai.year, finalMulai.month, finalMulai.day);
+    final selesaiDateOnly = DateTime(finalSelesai.year, finalSelesai.month, finalSelesai.day);
+    final coversToday = !todayDateOnly.isBefore(mulaiDateOnly) && !todayDateOnly.isAfter(selesaiDateOnly);
+
+    if (coversToday) {
       final hasCheckedIn = await AttendanceService.hasAnyRecordToday(
         widget.employeeId,
       );
@@ -1364,29 +1375,8 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
               ),
               const SizedBox(height: 18),
 
-              // Date pickers (Sembunyikan jika 'Sakit')
-              if (_selectedJenis != 'Sakit') ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: _DateField(
-                        label: 'Mulai',
-                        date: _tanggalMulai,
-                        onTap: () => _pickDate(isStart: true),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _DateField(
-                        label: 'Selesai',
-                        date: _tanggalSelesai,
-                        onTap: () => _pickDate(isStart: false),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-              ] else ...[
+              // Banner khusus Sakit (info lampiran wajib + boleh backdate)
+              if (_selectedJenis == 'Sakit') ...[
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
@@ -1409,7 +1399,7 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Pengajuan sakit berlaku untuk 1 hari (hari ini). Jika besok masih sakit, harap ajukan kembali.',
+                          'Pilih durasi sakit (boleh beberapa hari sekaligus). Surat dokter wajib dilampirkan.',
                           style: TextStyle(
                             fontSize: 12,
                             color: const Color(0xFFDC2626),
@@ -1420,8 +1410,30 @@ class _LeaveFormSheetState extends State<_LeaveFormSheet> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
               ],
+
+              // Date pickers (range untuk semua jenis)
+              Row(
+                children: [
+                  Expanded(
+                    child: _DateField(
+                      label: 'Mulai',
+                      date: _tanggalMulai,
+                      onTap: () => _pickDate(isStart: true),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _DateField(
+                      label: 'Selesai',
+                      date: _tanggalSelesai,
+                      onTap: () => _pickDate(isStart: false),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
 
               // Alasan
               Text(
