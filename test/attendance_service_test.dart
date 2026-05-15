@@ -104,4 +104,31 @@ void main() {
       expect(result['durasi_telat'], 36, reason: 'Harus 36 menit, BUKAN 456');
     });
   });
+
+  group('AttendanceWindowResult', () {
+    test('Konstruksi data class', () {
+      const r = AttendanceWindowResult(
+        allowed: false,
+        earliestTime: '08:20',
+        jamMasuk: '09:00',
+        awalAbsenMenit: 40,
+      );
+      expect(r.allowed, false);
+      expect(r.earliestTime, '08:20');
+      expect(r.jamMasuk, '09:00');
+      expect(r.awalAbsenMenit, 40);
+    });
+
+    test('Allowed=true bisa earliestTime null (fitur OFF)', () {
+      const r = AttendanceWindowResult(
+        allowed: true,
+        earliestTime: null,
+        jamMasuk: '09:00',
+        awalAbsenMenit: 0,
+      );
+      expect(r.allowed, true);
+      expect(r.earliestTime, null);
+      expect(r.awalAbsenMenit, 0);
+    });
+  });
 }

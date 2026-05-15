@@ -30,6 +30,9 @@ enum AttendanceErrorType {
   /// Sudah absen hari ini (duplikat).
   alreadyCheckedIn,
 
+  /// Belum waktunya absen (sebelum window mulai).
+  tooEarly,
+
   /// Error database / network.
   databaseError,
 
@@ -49,6 +52,29 @@ class AttendanceException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Hasil pengecekan window absen (boleh absen sekarang atau belum).
+class AttendanceWindowResult {
+  /// True jika sekarang sudah masuk window absen (boleh lanjut).
+  final bool allowed;
+
+  /// Format "HH:mm" jam mulai bisa absen. Null jika fitur OFF.
+  final String? earliestTime;
+
+  /// Format "HH:mm" jam masuk divisi.
+  final String jamMasuk;
+
+  /// Berapa menit sebelum jam_masuk pegawai bisa mulai absen.
+  /// 0 = fitur tidak aktif untuk divisi ini.
+  final int awalAbsenMenit;
+
+  const AttendanceWindowResult({
+    required this.allowed,
+    required this.earliestTime,
+    required this.jamMasuk,
+    required this.awalAbsenMenit,
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -224,7 +250,7 @@ abstract final class AttendanceService {
   /// Ambil jadwal (schedule) untuk divisi tertentu.
   ///
   /// Returns Map dengan keys: id, division_id, jam_masuk, jam_pulang,
-  /// toleransi_menit, status.
+  /// toleransi_menit, awal_absen_menit, status.
   /// Throws [AttendanceException] jika tidak ada jadwal.
   static Future<Map<String, dynamic>> getDivisionSchedule(
     int divisionId,
@@ -235,7 +261,7 @@ abstract final class AttendanceService {
       final response = await SupabaseService.client
           .from('division_schedules')
           .select(
-              'id, division_id, jam_masuk, jam_pulang, toleransi_menit, status')
+              'id, division_id, jam_masuk, jam_pulang, toleransi_menit, awal_absen_menit, status')
           .eq('division_id', divisionId)
           .eq('status', 'Aktif')
           .maybeSingle();
@@ -258,6 +284,77 @@ abstract final class AttendanceService {
         message: 'Gagal mengambil jadwal divisi: $e',
       );
     }
+  }
+
+  // ── Window Absen (anti-clock-in-too-early) ──────────────────────────────
+
+  /// Cek apakah pegawai sudah boleh absen sekarang berdasarkan window divisi.
+  ///
+  /// Window: pegawai bisa mulai absen sejak `jam_masuk - awal_absen_menit`.
+  /// Jika `awal_absen_menit = 0` → fitur OFF, selalu return allowed.
+  ///
+  /// Method ini dipanggil dari UI **setelah user pilih divisi** dan
+  /// **sebelum** lanjut ke face verification & GPS, supaya pegawai cepat tahu
+  /// kalau belum waktunya absen.
+  ///
+  /// Throws [AttendanceException] jika gagal ambil schedule atau server time.
+  static Future<AttendanceWindowResult> checkAttendanceWindow({
+    required int divisionId,
+  }) async {
+    final schedule = await getDivisionSchedule(divisionId);
+    final jamMasukStr = schedule['jam_masuk'] as String;
+    final awalAbsenMenit = (schedule['awal_absen_menit'] as int?) ?? 0;
+
+    // Format jam_masuk -> "HH:mm" untuk tampilan
+    final jamMasukDisplay = jamMasukStr.length >= 5
+        ? jamMasukStr.substring(0, 5)
+        : jamMasukStr;
+
+    // Fitur OFF -> selalu allowed
+    if (awalAbsenMenit <= 0) {
+      return AttendanceWindowResult(
+        allowed: true,
+        earliestTime: null,
+        jamMasuk: jamMasukDisplay,
+        awalAbsenMenit: 0,
+      );
+    }
+
+    // Ambil waktu server WIB fresh (selalu authoritative).
+    final now = await ServerTimeService.getServerTimeForCriticalOps();
+
+    // Hitung earliest = jam_masuk - awal_absen_menit (relative to today WIB)
+    final parts = jamMasukStr.split(':');
+    final scheduleHour = int.parse(parts[0]);
+    final scheduleMinute = int.parse(parts[1]);
+    final scheduleTime = DateTime(
+      now.year, now.month, now.day,
+      scheduleHour, scheduleMinute,
+    );
+    final earliest = scheduleTime.subtract(Duration(minutes: awalAbsenMenit));
+
+    final earliestStr =
+        '${earliest.hour.toString().padLeft(2, '0')}:${earliest.minute.toString().padLeft(2, '0')}';
+
+    debugPrint('[AttendanceService] checkAttendanceWindow: '
+        'now=$now schedule=$scheduleTime earliest=$earliest '
+        'awalAbsen=$awalAbsenMenit menit allowed=${!now.isBefore(earliest)}');
+
+    if (now.isBefore(earliest)) {
+      return AttendanceWindowResult(
+        allowed: false,
+        earliestTime: earliestStr,
+        jamMasuk: jamMasukDisplay,
+        awalAbsenMenit: awalAbsenMenit,
+      );
+    }
+
+    return AttendanceWindowResult(
+      allowed: true,
+      earliestTime: earliestStr,
+      jamMasuk: jamMasukDisplay,
+      awalAbsenMenit: awalAbsenMenit,
+    );
   }
 
   // ── Fetch Record Hari Ini ─────────────────────────────────────────────
@@ -477,7 +574,7 @@ abstract final class AttendanceService {
       final schedule = await SupabaseService.client
           .from('division_schedules')
           .select(
-              'id, division_id, jam_masuk, jam_pulang, toleransi_menit, status')
+              'id, division_id, jam_masuk, jam_pulang, toleransi_menit, awal_absen_menit, status')
           .eq('division_id', divisionId)
           .eq('status', 'Aktif')
           .maybeSingle();
@@ -493,6 +590,32 @@ abstract final class AttendanceService {
       // 3. Hitung status kehadiran menggunakan waktu WIB yang konsisten
       final jamMasukStr = schedule['jam_masuk'] as String;
       final toleransiMenit = schedule['toleransi_menit'] as int;
+      final awalAbsenMenit = (schedule['awal_absen_menit'] as int?) ?? 0;
+
+      // 3a. Defense kedua: cek window. UI seharusnya sudah cek duluan,
+      // tapi tetap guard di sini agar tidak ada celah.
+      if (awalAbsenMenit > 0) {
+        final parts = jamMasukStr.split(':');
+        final scheduleTime = DateTime(
+          now.year, now.month, now.day,
+          int.parse(parts[0]),
+          int.parse(parts[1]),
+        );
+        final earliest = scheduleTime.subtract(Duration(minutes: awalAbsenMenit));
+        if (now.isBefore(earliest)) {
+          final earliestStr =
+              '${earliest.hour.toString().padLeft(2, '0')}:${earliest.minute.toString().padLeft(2, '0')}';
+          final jamMasukDisplay = jamMasukStr.length >= 5
+              ? jamMasukStr.substring(0, 5)
+              : jamMasukStr;
+          throw AttendanceException(
+            type: AttendanceErrorType.tooEarly,
+            message:
+                'Belum waktunya absen. Anda baru bisa absen mulai pukul $earliestStr WIB '
+                '($awalAbsenMenit menit sebelum jam masuk $jamMasukDisplay).',
+          );
+        }
+      }
 
       final statusResult = calculateAttendanceStatus(
         checkInTime: now, // Waktu WIB yang sudah konsisten
@@ -551,6 +674,28 @@ abstract final class AttendanceService {
       );
     } catch (e) {
       debugPrint('[AttendanceService] submitAttendance error: $e');
+
+      // Parse exception dari trigger DB enforce_server_timestamp.
+      // Format pesan: "TOO_EARLY|HH:MM|HH:MM" (earliest|jam_masuk).
+      final msg = e.toString();
+      final tooEarlyIdx = msg.indexOf('TOO_EARLY|');
+      if (tooEarlyIdx >= 0) {
+        final fragment = msg.substring(tooEarlyIdx);
+        final endIdx = fragment.indexOf('\n');
+        final clean = endIdx >= 0 ? fragment.substring(0, endIdx) : fragment;
+        final parts = clean.split('|');
+        if (parts.length >= 3) {
+          final earliest = parts[1].trim();
+          final jamMasuk = parts[2].trim();
+          throw AttendanceException(
+            type: AttendanceErrorType.tooEarly,
+            message:
+                'Belum waktunya absen. Anda baru bisa absen mulai pukul $earliest WIB '
+                '(jam masuk $jamMasuk).',
+          );
+        }
+      }
+
       throw AttendanceException(
         type: AttendanceErrorType.databaseError,
         message: 'Gagal menyimpan data absensi: $e',

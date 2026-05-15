@@ -1399,6 +1399,130 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  /// Dialog informasi: pegawai mencoba absen sebelum window dimulai.
+  /// Tampilkan jam mulai bisa absen + jam masuk divisi.
+  void _showAttendanceWindowDialog({
+    required String divisionName,
+    required String earliestTime,
+    required String jamMasuk,
+    required int awalAbsenMenit,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        backgroundColor: AppColors.surface,
+        title: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.schedule_rounded,
+                color: AppColors.warning,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Belum Waktunya Absen',
+                style: AppTextStyles.h4.copyWith(
+                  color: AppColors.warning,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Absensi untuk divisi $divisionName baru dapat dilakukan mulai pukul $earliestTime WIB.',
+              style: AppTextStyles.body.copyWith(
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.info.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.info.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.access_time_rounded,
+                        color: AppColors.info,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Detail jadwal',
+                        style: AppTextStyles.labelSm.copyWith(
+                          color: AppColors.info,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '• Jam masuk divisi: $jamMasuk WIB\n'
+                    '• Mulai bisa absen: $earliestTime WIB\n'
+                    '• Window absen dini: $awalAbsenMenit menit sebelum jam masuk',
+                    style: AppTextStyles.bodySm.copyWith(
+                      color: AppColors.info,
+                      fontSize: 12,
+                      height: 1.6,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Silakan kembali pada waktu yang tertera. Terima kasih.',
+              style: AppTextStyles.bodySm.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'OK, Mengerti',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Flow absen lengkap:
   /// 1. Pilih divisi
   /// 2. Ambil lokasi divisi dari database
@@ -1414,6 +1538,38 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     final divisionId = division['id'] as int;
     final divisionName = division['nama'] as String;
+
+    // ── 1.5. Cek window absen (sebelum lokasi/wajah, supaya cepat tahu) ──
+    _showLoading('Memeriksa jadwal absen...');
+    AttendanceWindowResult windowResult;
+    try {
+      windowResult = await AttendanceService.checkAttendanceWindow(
+        divisionId: divisionId,
+      );
+    } on AttendanceException catch (e) {
+      if (!mounted) return;
+      _hideLoading();
+      AppNotification.show(
+        context,
+        type: NotificationType.error,
+        title: 'Gagal Memeriksa Jadwal',
+        message: e.message,
+        duration: const Duration(seconds: 4),
+      );
+      return;
+    }
+    if (!mounted) return;
+    _hideLoading();
+
+    if (!windowResult.allowed) {
+      _showAttendanceWindowDialog(
+        divisionName: divisionName,
+        earliestTime: windowResult.earliestTime ?? '--:--',
+        jamMasuk: windowResult.jamMasuk,
+        awalAbsenMenit: windowResult.awalAbsenMenit,
+      );
+      return;
+    }
 
     // ── 2. Ambil lokasi divisi ──
     _showLoading('Mengambil data lokasi divisi...');
@@ -1549,13 +1705,26 @@ class _DashboardScreenState extends State<DashboardScreen>
     } on AttendanceException catch (e) {
       if (!mounted) return;
       _hideLoading();
-      AppNotification.show(
-        context,
-        type: NotificationType.error,
-        title: 'Gagal Absen',
-        message: e.message,
-        duration: const Duration(seconds: 5),
-      );
+      // Jika trigger DB / defense kedua mendeteksi too-early (mis. user
+      // menunggu lama di flow GPS/wajah lalu submit di luar window),
+      // tampilkan pesan jelas, bukan toast error generik.
+      if (e.type == AttendanceErrorType.tooEarly) {
+        AppNotification.show(
+          context,
+          type: NotificationType.warning,
+          title: 'Belum Waktunya Absen',
+          message: e.message,
+          duration: const Duration(seconds: 6),
+        );
+      } else {
+        AppNotification.show(
+          context,
+          type: NotificationType.error,
+          title: 'Gagal Absen',
+          message: e.message,
+          duration: const Duration(seconds: 5),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       _hideLoading();
