@@ -356,7 +356,7 @@ class _MainCardState extends State<_MainCard> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 // Greeting + name + position
                 Expanded(
@@ -368,40 +368,32 @@ class _MainCardState extends State<_MainCard> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
-                          color: Colors.white.withValues(alpha: 0.6),
+                          color: Colors.white.withValues(alpha: 0.65),
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
                         widget.userName,
                         style: AppTextStyles.onDarkTitle.copyWith(
-                          fontSize: 18,
+                          fontSize: 19,
                           fontWeight: FontWeight.w800,
                           color: Colors.white,
                           letterSpacing: -0.3,
+                          height: 1.15,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          _InfoPill(
-                            icon: Icons.work_outline_rounded,
-                            text: widget.position,
-                          ),
-                          const SizedBox(width: 6),
-                          _InfoPill(
-                            icon: Icons.badge_rounded,
-                            text: widget.department,
-                          ),
-                        ],
+                      const SizedBox(height: 6),
+                      _InfoPill(
+                        icon: Icons.work_outline_rounded,
+                        text: widget.position,
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Avatar
+                // Avatar (lebih besar sebagai anchor visual)
                 GestureDetector(
                   onTap: widget.onAvatarTap,
                   child: Container(
@@ -409,26 +401,26 @@ class _MainCardState extends State<_MainCard> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.4),
+                        color: Colors.white.withValues(alpha: 0.35),
                         width: 2,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+                          color: Colors.black.withValues(alpha: 0.18),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
                         ),
                       ],
                     ),
                     child: CircleAvatar(
-                      radius: 22,
+                      radius: 26,
                       backgroundColor: AppColors.primary600,
                       backgroundImage: widget.avatarUrl != null
                           ? NetworkImage(widget.avatarUrl!)
                           : null,
                       child: widget.avatarUrl == null
                           ? const Icon(Icons.person_rounded,
-                              color: Colors.white, size: 22)
+                              color: Colors.white, size: 26)
                           : null,
                     ),
                   ),
@@ -439,77 +431,67 @@ class _MainCardState extends State<_MainCard> {
 
           const SizedBox(height: 16),
 
-          // ── Clock section ──
+          // ── Clock section (tanpa container nested, langsung di main card) ──
           RepaintBoundary(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.08),
-                    width: 1,
-                  ),
-                ),
-                child: Column(
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          _timeFormat.format(_now),
-                          style: AppTextStyles.numericLg.copyWith(
-                            fontSize: 38,
-                            letterSpacing: 2,
-                            height: 1,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _secFormat.format(_now),
-                          style: AppTextStyles.numericLg.copyWith(
-                            fontSize: 18,
-                            color: Colors.white.withValues(alpha: 0.4),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
                     Text(
-                      _dateFormat.format(_now),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                      _timeFormat.format(_now),
+                      style: AppTextStyles.numericLg.copyWith(
+                        fontSize: 42,
+                        letterSpacing: 1.5,
+                        height: 1,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _secFormat.format(_now),
+                      style: AppTextStyles.numericLg.copyWith(
+                        fontSize: 18,
+                        height: 1,
                         color: Colors.white.withValues(alpha: 0.45),
-                        letterSpacing: 0.2,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 6),
+                Text(
+                  _dateFormat.format(_now),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.55),
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
             ),
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
           // ── Status / CTA ──
-          if (!widget.hasCheckedIn)
-            _AbsenButton(onTap: widget.onAbsenTap)
-          else if (widget.attendanceInfo != null &&
-              widget.attendanceInfo!.requiresClockOut &&
-              !widget.attendanceInfo!.hasClockedOut)
-            _ClockOutButton(
-              info: widget.attendanceInfo!,
-              onTap: widget.onClockOutTap,
-            )
-          else
-            _StatusCard(info: widget.attendanceInfo!),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+            child: !widget.hasCheckedIn
+                ? _AbsenButton(onTap: widget.onAbsenTap)
+                : (widget.attendanceInfo != null &&
+                        widget.attendanceInfo!.requiresClockOut &&
+                        !widget.attendanceInfo!.hasClockedOut)
+                    ? _ClockOutButton(
+                        info: widget.attendanceInfo!,
+                        onTap: widget.onClockOutTap,
+                      )
+                    : _StatusCard(info: widget.attendanceInfo!),
+          ),
         ],
       ),
     );
@@ -634,7 +616,6 @@ class _StatusCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(16),
@@ -644,28 +625,23 @@ class _StatusCard extends StatelessWidget {
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
-          BoxShadow(
-            color: bgColor.withValues(alpha: 0.12),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
         ],
       ),
       child: Column(
         children: [
-          // ═══ Header: status pill + label ═══
+          // ═══ Header: icon + label + desc + (durasi badge) ═══
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             child: Row(
               children: [
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: Colors.white.withValues(alpha: 0.22),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(icon, color: Colors.white, size: 20),
+                  child: Icon(icon, color: Colors.white, size: 19),
                 ),
                 const SizedBox(width: 11),
                 Expanded(
@@ -678,7 +654,7 @@ class _StatusCard extends StatelessWidget {
                           color: Colors.white,
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: 0.7,
+                          letterSpacing: 0.6,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -698,12 +674,8 @@ class _StatusCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 9, vertical: 5),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
+                      color: Colors.white.withValues(alpha: 0.22),
                       borderRadius: BorderRadius.circular(7),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.28),
-                        width: 1,
-                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -711,7 +683,7 @@ class _StatusCard extends StatelessWidget {
                         Icon(
                           Icons.timer_rounded,
                           size: 11,
-                          color: Colors.white.withValues(alpha: 0.85),
+                          color: Colors.white.withValues(alpha: 0.9),
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -730,16 +702,17 @@ class _StatusCard extends StatelessWidget {
             ),
           ),
 
-          // ═══ Time rows: jam masuk + jam pulang ═══
+          // ═══ Time slots (masuk + pulang jika applicable) ═══
           if (info.isPresent)
             Container(
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.14),
-                borderRadius: hasClockOutSlot
-                    ? BorderRadius.zero
-                    : const BorderRadius.vertical(
-                        bottom: Radius.circular(16),
-                      ),
+                color: Colors.black.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.vertical(
+                  bottom: hasClockOutSlot
+                      ? Radius.zero
+                      : const Radius.circular(16),
+                  top: Radius.zero,
+                ),
               ),
               child: Row(
                 children: [
@@ -760,8 +733,8 @@ class _StatusCard extends StatelessWidget {
                   if (hasClockOutSlot) ...[
                     Container(
                       width: 1,
-                      height: 56,
-                      color: Colors.white.withValues(alpha: 0.12),
+                      height: 48,
+                      color: Colors.white.withValues(alpha: 0.16),
                     ),
                     Expanded(
                       child: _TimeSlot(
@@ -778,7 +751,7 @@ class _StatusCard extends StatelessWidget {
                             : Colors.white.withValues(alpha: 0.55),
                         timeColor: info.hasClockedOut
                             ? Colors.white
-                            : Colors.white.withValues(alpha: 0.55),
+                            : Colors.white.withValues(alpha: 0.5),
                         lightColor: lightColor,
                       ),
                     ),
@@ -787,14 +760,14 @@ class _StatusCard extends StatelessWidget {
               ),
             ),
 
-          // ═══ Footer: divisi + jadwal masuk ═══
+          // ═══ Footer: divisi + jadwal ═══
           if (info.isPresent)
             Container(
               width: double.infinity,
               padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.22),
+                color: Colors.black.withValues(alpha: 0.28),
                 borderRadius: const BorderRadius.vertical(
                   bottom: Radius.circular(16),
                 ),
@@ -803,7 +776,7 @@ class _StatusCard extends StatelessWidget {
                 children: [
                   Icon(
                     Icons.location_on_rounded,
-                    color: lightColor.withValues(alpha: 0.8),
+                    color: lightColor.withValues(alpha: 0.85),
                     size: 12,
                   ),
                   const SizedBox(width: 4),
@@ -811,8 +784,8 @@ class _StatusCard extends StatelessWidget {
                     child: Text(
                       info.divisionName,
                       style: TextStyle(
-                        color: lightColor.withValues(alpha: 0.85),
-                        fontSize: 10.5,
+                        color: lightColor,
+                        fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -822,7 +795,7 @@ class _StatusCard extends StatelessWidget {
                   if (info.scheduleTime != null) ...[
                     Icon(
                       Icons.schedule_rounded,
-                      color: lightColor.withValues(alpha: 0.65),
+                      color: lightColor.withValues(alpha: 0.7),
                       size: 11,
                     ),
                     const SizedBox(width: 3),
@@ -831,9 +804,9 @@ class _StatusCard extends StatelessWidget {
                           ? '${info.scheduleTime} – ${info.scheduleJamPulang}'
                           : 'Jadwal ${info.scheduleTime}',
                       style: TextStyle(
-                        color: lightColor.withValues(alpha: 0.7),
+                        color: lightColor.withValues(alpha: 0.8),
                         fontSize: 10,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
@@ -892,7 +865,7 @@ class _TimeSlot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -901,39 +874,40 @@ class _TimeSlot extends StatelessWidget {
             children: [
               Icon(
                 icon,
-                color: lightColor.withValues(alpha: 0.65),
-                size: 11,
+                color: lightColor.withValues(alpha: 0.7),
+                size: 12,
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 5),
               Text(
                 label,
                 style: TextStyle(
-                  color: lightColor.withValues(alpha: 0.7),
-                  fontSize: 9.5,
+                  color: lightColor.withValues(alpha: 0.78),
+                  fontSize: 10,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
+                  letterSpacing: 0.9,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             time,
             style: TextStyle(
               color: timeColor ?? Colors.white,
-              fontSize: 22,
+              fontSize: 24,
               fontWeight: FontWeight.w800,
               fontFeatures: const [FontFeature.tabularFigures()],
               height: 1,
+              letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 4),
           Text(
             sublabel,
             style: TextStyle(
               color: sublabelColor,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
