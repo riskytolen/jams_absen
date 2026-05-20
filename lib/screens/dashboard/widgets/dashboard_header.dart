@@ -1083,86 +1083,213 @@ class _ClockOutButtonState extends State<_ClockOutButton>
   @override
   Widget build(BuildContext context) {
     final scheduleStr = widget.info.scheduleJamPulang ?? '';
-    return GestureDetector(
-      onTapDown: (_) => _tapCtrl.forward(),
-      onTapUp: (_) {
-        HapticFeedback.lightImpact();
-        _tapCtrl.reverse();
-        widget.onTap?.call();
-      },
-      onTapCancel: () => _tapCtrl.reverse(),
-      child: ScaleTransition(
-        scale: _scale,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+    final isLate = widget.info.isLate;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Mini status card: tampilkan info jam masuk ──
+        Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF10B981), Color(0xFF059669)],
+            color: Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.12),
+              width: 1,
             ),
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF10B981).withValues(alpha: 0.35),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
           ),
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12),
+                  color: (isLate
+                          ? const Color(0xFFDC2626)
+                          : const Color(0xFF059669))
+                      .withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
-                  Icons.logout_rounded,
-                  color: Colors.white,
-                  size: 22,
+                child: Icon(
+                  isLate ? Icons.warning_rounded : Icons.check_circle_rounded,
+                  color: isLate
+                      ? const Color(0xFFFCA5A5)
+                      : const Color(0xFF6EE7B7),
+                  size: 18,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Absen Pulang',
-                      style: AppTextStyles.button.copyWith(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                      'Sudah Absen Masuk',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.6),
+                        letterSpacing: 0.4,
                       ),
                     ),
                     const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text(
+                          widget.info.clockInTime,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (isLate
+                                    ? const Color(0xFFDC2626)
+                                    : const Color(0xFF059669))
+                                .withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            isLate
+                                ? 'Telat ${widget.info.durasiTelat}m'
+                                : 'Tepat',
+                            style: const TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.location_on_rounded,
+                      size: 11,
+                      color: Colors.white.withValues(alpha: 0.55),
+                    ),
+                    const SizedBox(width: 3),
                     Text(
-                      scheduleStr.isNotEmpty
-                          ? 'Jadwal pulang $scheduleStr WIB'
-                          : 'Verifikasi wajah untuk absen pulang',
+                      widget.info.divisionName,
                       style: TextStyle(
-                        fontSize: 11.5,
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontWeight: FontWeight.w500,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.7),
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: Colors.white.withValues(alpha: 0.7),
-                size: 22,
-              ),
             ],
           ),
         ),
-      ),
+
+        // ── Tombol Absen Pulang ──
+        GestureDetector(
+          onTapDown: (_) => _tapCtrl.forward(),
+          onTapUp: (_) {
+            HapticFeedback.lightImpact();
+            _tapCtrl.reverse();
+            widget.onTap?.call();
+          },
+          onTapCancel: () => _tapCtrl.reverse(),
+          child: ScaleTransition(
+            scale: _scale,
+            child: Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF10B981), Color(0xFF059669)],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.logout_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Absen Pulang',
+                          style: AppTextStyles.button.copyWith(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          scheduleStr.isNotEmpty
+                              ? 'Jadwal pulang $scheduleStr WIB'
+                              : 'Verifikasi wajah untuk absen pulang',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: Colors.white.withValues(alpha: 0.85),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: Colors.white.withValues(alpha: 0.7),
+                    size: 22,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
