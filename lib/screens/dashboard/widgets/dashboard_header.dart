@@ -553,7 +553,7 @@ class _InfoPill extends StatelessWidget {
 }
 
 // ═════════════════════════════════════════════════════════
-// STATUS CARD — Standalone, high contrast, separated
+// STATUS CARD — Profesional, support clock-out (jam masuk + pulang)
 // ═════════════════════════════════════════════════════════
 class _StatusCard extends StatelessWidget {
   final AttendanceInfo info;
@@ -568,13 +568,18 @@ class _StatusCard extends StatelessWidget {
     final String label;
     final String desc;
 
+    final bool hasClockOutSlot = info.requiresClockOut && info.isPresent;
+    final bool isComplete = hasClockOutSlot && info.hasClockedOut;
+
     switch (info.status) {
       case 'Terlambat':
         bgColor = const Color(0xFFDC2626);
         lightColor = const Color(0xFFFEE2E2);
         icon = Icons.warning_rounded;
-        label = 'TERLAMBAT';
-        desc = '+${info.durasiTelat} menit dari jadwal';
+        label = isComplete ? 'ABSENSI LENGKAP' : 'TERLAMBAT';
+        desc = isComplete
+            ? 'Masuk telat ${info.durasiTelat} menit'
+            : '+${info.durasiTelat} menit dari jadwal';
         break;
       case 'Izin':
         bgColor = const Color(0xFFD97706);
@@ -615,49 +620,54 @@ class _StatusCard extends StatelessWidget {
         bgColor = const Color(0xFF059669);
         lightColor = const Color(0xFFD1FAE5);
         icon = Icons.check_circle_rounded;
-        label = 'TEPAT WAKTU';
-        desc = 'Absensi tercatat dengan baik';
+        label = isComplete ? 'ABSENSI LENGKAP' : 'TEPAT WAKTU';
+        desc = isComplete
+            ? 'Selamat, hari kerja Anda selesai'
+            : 'Absensi tercatat dengan baik';
+    }
+
+    // Hitung durasi kerja jika sudah lengkap
+    String? durasiKerja;
+    if (isComplete && info.clockOutTime != null) {
+      durasiKerja = _hitungDurasi(info.clockInTime, info.clockOutTime!);
     }
 
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+      margin: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: bgColor.withValues(alpha: 0.35),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
+            color: bgColor.withValues(alpha: 0.32),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
           BoxShadow(
-            color: bgColor.withValues(alpha: 0.15),
-            blurRadius: 6,
+            color: bgColor.withValues(alpha: 0.12),
+            blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
         children: [
-          // ── Main status row ──
+          // ═══ Header: status pill + label ═══
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
             child: Row(
               children: [
-                // Icon container
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(11),
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(icon, color: Colors.white, size: 22),
+                  child: Icon(icon, color: Colors.white, size: 20),
                 ),
-                const SizedBox(width: 12),
-
-                // Label + desc
+                const SizedBox(width: 11),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -666,16 +676,16 @@ class _StatusCard extends StatelessWidget {
                         label,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: 0.6,
+                          letterSpacing: 0.7,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         desc,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.75),
+                          color: Colors.white.withValues(alpha: 0.78),
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
                         ),
@@ -683,114 +693,250 @@ class _StatusCard extends StatelessWidget {
                     ],
                   ),
                 ),
-
-                // Clock-in time (hanya untuk Hadir/Terlambat)
-                if (info.isPresent)
+                if (durasiKerja != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 9, vertical: 5),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      info.clockInTime,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        fontFeatures: [FontFeature.tabularFigures()],
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(7),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.28),
+                        width: 1,
                       ),
                     ),
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'Hari Ini',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.timer_rounded,
+                          size: 11,
+                          color: Colors.white.withValues(alpha: 0.85),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          durasiKerja,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
               ],
             ),
           ),
 
-          // ── Detail footer (hanya untuk Hadir/Terlambat) ──
+          // ═══ Time rows: jam masuk + jam pulang ═══
+          if (info.isPresent)
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.14),
+                borderRadius: hasClockOutSlot
+                    ? BorderRadius.zero
+                    : const BorderRadius.vertical(
+                        bottom: Radius.circular(16),
+                      ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _TimeSlot(
+                      icon: Icons.login_rounded,
+                      label: 'MASUK',
+                      time: info.clockInTime,
+                      sublabel: info.isLate
+                          ? 'Telat ${info.durasiTelat}m'
+                          : 'Tepat',
+                      sublabelColor: info.isLate
+                          ? const Color(0xFFFCA5A5)
+                          : const Color(0xFF6EE7B7),
+                      lightColor: lightColor,
+                    ),
+                  ),
+                  if (hasClockOutSlot) ...[
+                    Container(
+                      width: 1,
+                      height: 56,
+                      color: Colors.white.withValues(alpha: 0.12),
+                    ),
+                    Expanded(
+                      child: _TimeSlot(
+                        icon: Icons.logout_rounded,
+                        label: 'PULANG',
+                        time: info.clockOutTime ?? '--:--',
+                        sublabel: info.hasClockedOut
+                            ? (info.statusPulang ?? 'Tepat')
+                            : info.scheduleJamPulang != null
+                                ? 'Jadwal ${info.scheduleJamPulang}'
+                                : 'Belum absen',
+                        sublabelColor: info.hasClockedOut
+                            ? const Color(0xFF6EE7B7)
+                            : Colors.white.withValues(alpha: 0.55),
+                        timeColor: info.hasClockedOut
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.55),
+                        lightColor: lightColor,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+          // ═══ Footer: divisi + jadwal masuk ═══
           if (info.isPresent)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.12),
+                color: Colors.black.withValues(alpha: 0.22),
                 borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(14),
+                  bottom: Radius.circular(16),
                 ),
               ),
               child: Row(
                 children: [
                   Icon(
                     Icons.location_on_rounded,
-                    color: lightColor.withValues(alpha: 0.85),
-                    size: 14,
+                    color: lightColor.withValues(alpha: 0.8),
+                    size: 12,
                   ),
                   const SizedBox(width: 4),
-                  Text(
-                    info.divisionName,
-                    style: TextStyle(
-                      color: lightColor.withValues(alpha: 0.85),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      info.divisionName,
+                      style: TextStyle(
+                        color: lightColor.withValues(alpha: 0.85),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const Spacer(),
-                  // Jadwal & batas telat
                   if (info.scheduleTime != null) ...[
-                  Icon(
-                    Icons.schedule_rounded,
-                    color: lightColor.withValues(alpha: 0.7),
-                    size: 12,
-                  ),
-                  const SizedBox(width: 3),
-                  Text(
-                    'Jadwal ${info.scheduleTime}',
-                    style: TextStyle(
-                      color: lightColor.withValues(alpha: 0.7),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  if (info.batasTelatTime != null) ...[
-                    Container(
-                      width: 1,
-                      height: 10,
-                      margin: const EdgeInsets.symmetric(horizontal: 6),
-                      color: lightColor.withValues(alpha: 0.3),
-                    ),
                     Icon(
-                      Icons.timer_outlined,
-                      color: lightColor.withValues(alpha: 0.7),
-                      size: 12,
+                      Icons.schedule_rounded,
+                      color: lightColor.withValues(alpha: 0.65),
+                      size: 11,
                     ),
                     const SizedBox(width: 3),
                     Text(
-                      'Batas ${info.batasTelatTime}',
+                      hasClockOutSlot && info.scheduleJamPulang != null
+                          ? '${info.scheduleTime} – ${info.scheduleJamPulang}'
+                          : 'Jadwal ${info.scheduleTime}',
                       style: TextStyle(
                         color: lightColor.withValues(alpha: 0.7),
                         fontSize: 10,
                         fontWeight: FontWeight.w500,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ],
                 ],
-              ],
+              ),
             ),
+        ],
+      ),
+    );
+  }
+
+  /// Hitung durasi antara jam masuk dan jam pulang (HH:mm).
+  /// Return format "Xj Ym".
+  String _hitungDurasi(String masukStr, String pulangStr) {
+    try {
+      final masuk = masukStr.split(':').map(int.parse).toList();
+      final pulang = pulangStr.split(':').map(int.parse).toList();
+      final menitMasuk = masuk[0] * 60 + masuk[1];
+      final menitPulang = pulang[0] * 60 + pulang[1];
+      final diff = menitPulang - menitMasuk;
+      if (diff <= 0) return '0m';
+      final jam = diff ~/ 60;
+      final menit = diff % 60;
+      if (jam == 0) return '${menit}m';
+      if (menit == 0) return '${jam}j';
+      return '${jam}j ${menit}m';
+    } catch (_) {
+      return '';
+    }
+  }
+}
+
+// ═════════════════════════════════════════════════════════
+// TIME SLOT — Time cell (masuk atau pulang) untuk _StatusCard
+// ═════════════════════════════════════════════════════════
+class _TimeSlot extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String time;
+  final String sublabel;
+  final Color sublabelColor;
+  final Color? timeColor;
+  final Color lightColor;
+
+  const _TimeSlot({
+    required this.icon,
+    required this.label,
+    required this.time,
+    required this.sublabel,
+    required this.sublabelColor,
+    required this.lightColor,
+    this.timeColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                color: lightColor.withValues(alpha: 0.65),
+                size: 11,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: lightColor.withValues(alpha: 0.7),
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            time,
+            style: TextStyle(
+              color: timeColor ?? Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            sublabel,
+            style: TextStyle(
+              color: sublabelColor,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -1083,130 +1229,16 @@ class _ClockOutButtonState extends State<_ClockOutButton>
   @override
   Widget build(BuildContext context) {
     final scheduleStr = widget.info.scheduleJamPulang ?? '';
-    final isLate = widget.info.isLate;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── Mini status card: tampilkan info jam masuk ──
-        Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.12),
-              width: 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: (isLate
-                          ? const Color(0xFFDC2626)
-                          : const Color(0xFF059669))
-                      .withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  isLate ? Icons.warning_rounded : Icons.check_circle_rounded,
-                  color: isLate
-                      ? const Color(0xFFFCA5A5)
-                      : const Color(0xFF6EE7B7),
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Sudah Absen Masuk',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white.withValues(alpha: 0.6),
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Text(
-                          widget.info.clockInTime,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: (isLate
-                                    ? const Color(0xFFDC2626)
-                                    : const Color(0xFF059669))
-                                .withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            isLate
-                                ? 'Telat ${widget.info.durasiTelat}m'
-                                : 'Tepat',
-                            style: const TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.location_on_rounded,
-                      size: 11,
-                      color: Colors.white.withValues(alpha: 0.55),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      widget.info.divisionName,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white.withValues(alpha: 0.7),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+        // Status card lengkap dengan slot Masuk + Pulang (--:--)
+        _StatusCard(info: widget.info),
 
-        // ── Tombol Absen Pulang ──
+        const SizedBox(height: 12),
+
+        // Tombol Absen Pulang
         GestureDetector(
           onTapDown: (_) => _tapCtrl.forward(),
           onTapUp: (_) {
@@ -1230,9 +1262,9 @@ class _ClockOutButtonState extends State<_ClockOutButton>
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.35),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    color: const Color(0xFF10B981).withValues(alpha: 0.4),
+                    blurRadius: 14,
+                    offset: const Offset(0, 5),
                   ),
                 ],
               ),
@@ -1242,7 +1274,7 @@ class _ClockOutButtonState extends State<_ClockOutButton>
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
+                      color: Colors.white.withValues(alpha: 0.22),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
@@ -1268,7 +1300,7 @@ class _ClockOutButtonState extends State<_ClockOutButton>
                         const SizedBox(height: 2),
                         Text(
                           scheduleStr.isNotEmpty
-                              ? 'Jadwal pulang $scheduleStr WIB'
+                              ? 'Verifikasi wajah \u2014 jadwal $scheduleStr'
                               : 'Verifikasi wajah untuk absen pulang',
                           style: TextStyle(
                             fontSize: 11.5,
