@@ -1768,15 +1768,21 @@ class _DashboardScreenState extends State<DashboardScreen>
   OverlayEntry? _loadingOverlay;
 
   /// Handler tombol "Absen Pulang" untuk pegawai dengan divisi yang
-  /// menerapkan jam pulang. Validasi lokasi & waktu dilakukan di backend
-  /// (recordCheckOut). Face verification akan ditambahkan di iterasi berikutnya.
+  /// menerapkan jam pulang.
+  ///
+  /// Flow:
+  /// 1. Konfirmasi dialog
+  /// 2. Ambil division_id dari record hari ini
+  /// 3. Validasi lokasi GPS (sama seperti check-in)
+  /// 4. Verifikasi wajah (sama seperti check-in)
+  /// 5. recordCheckOut (cek waktu di backend)
   Future<void> _onClockOutTap() async {
     if (!_hasCheckedIn || _attendanceInfo == null) return;
     if (!_attendanceInfo!.requiresClockOut || _attendanceInfo!.hasClockedOut) {
       return;
     }
 
-    // Konfirmasi dulu
+    // ── 1. Konfirmasi ──
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1793,7 +1799,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Absen Pulang'),
+            child: const Text('Lanjutkan'),
           ),
         ],
       ),
@@ -1801,6 +1807,101 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     if (confirmed != true || !mounted) return;
 
+    // ── 2. Ambil division_id dari record hari ini ──
+    _showLoading('Memuat data absensi...');
+    final today = await AttendanceService.getTodayAttendance(
+      employeeId: _pegawai.id,
+    );
+    if (!mounted) return;
+    _hideLoading();
+
+    if (today == null || today['division_id'] == null) {
+      AppNotification.show(
+        context,
+        type: NotificationType.error,
+        title: 'Data Absensi Tidak Ditemukan',
+        message: 'Refresh halaman lalu coba lagi.',
+      );
+      return;
+    }
+
+    final divisionId = today['division_id'] as int;
+
+    // ── 3. Validasi GPS ──
+    _showLoading('Mengambil data lokasi divisi...');
+    List<Map<String, dynamic>> divisionLocations;
+    try {
+      divisionLocations = await AttendanceService.getDivisionLocations(divisionId);
+    } on AttendanceException catch (e) {
+      if (!mounted) return;
+      _hideLoading();
+      AppNotification.show(
+        context,
+        type: NotificationType.error,
+        title: 'Lokasi Divisi Tidak Ditemukan',
+        message: e.message,
+      );
+      return;
+    }
+    if (!mounted) return;
+    _hideLoading();
+
+    _showLoading('Memverifikasi lokasi GPS...');
+    try {
+      await LocationService.ensureReady();
+      final position = await LocationService.getCurrentPosition();
+      final validationResult = await StrictLocationValidator.validateLocationForDivision(
+        position: position,
+        divisionId: divisionId,
+        locations: divisionLocations,
+        employeeId: _pegawai.id,
+      );
+
+      if (!validationResult.isValid) {
+        if (!mounted) return;
+        _hideLoading();
+        AppNotification.show(
+          context,
+          type: NotificationType.error,
+          title: 'Lokasi Tidak Valid',
+          message: validationResult.message,
+          duration: const Duration(seconds: 5),
+        );
+        return;
+      }
+      if (!mounted) return;
+      _hideLoading();
+    } on LocationException catch (e) {
+      if (!mounted) return;
+      _hideLoading();
+      AppNotification.show(
+        context,
+        type: NotificationType.error,
+        title: 'Gagal Verifikasi Lokasi',
+        message: e.message,
+      );
+      return;
+    }
+
+    if (!mounted) return;
+
+    // ── 4. Verifikasi wajah ──
+    final faceResult = await Navigator.of(context).push<FaceVerificationResult>(
+      MaterialPageRoute(
+        builder: (_) => FaceVerificationScreen(employeeId: _pegawai.id),
+      ),
+    );
+
+    if (faceResult == null || !faceResult.success || !mounted) {
+      if (faceResult != null && !faceResult.success && faceResult.errorMessage != null) {
+        if (faceResult.errorMessage != 'Dibatalkan') {
+          _showFaceVerificationErrorDialog(faceResult.errorMessage!);
+        }
+      }
+      return;
+    }
+
+    // ── 5. Submit clock-out ──
     _showLoading('Mencatat jam pulang...');
 
     try {
@@ -1826,6 +1927,10 @@ class _DashboardScreenState extends State<DashboardScreen>
           statusPulang: result['status_pulang'] as String?,
         );
       });
+
+      // Sinkron dengan realtime service supaya kalau record diubah via web,
+      // listener auto-refresh state lokal.
+      _realtimeService.refresh();
 
       HapticFeedback.mediumImpact();
       AppNotification.show(
