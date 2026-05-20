@@ -470,6 +470,13 @@ class _TimelineItem extends StatelessWidget {
     final divisionName = divisionData?['nama'] as String? ?? '-';
     final scheduleJamMasuk = record['schedule_jam_masuk'] as String?;
     final scheduleTime = scheduleJamMasuk?.substring(0, 5);
+    // Clock-out fields (NULL kalau divisi tidak menerapkan jam pulang)
+    final scheduleJamPulangRaw = record['schedule_jam_pulang'] as String?;
+    final scheduleJamPulang = scheduleJamPulangRaw?.substring(0, 5);
+    final jamPulangRaw = record['jam_pulang'] as String?;
+    final jamPulang = jamPulangRaw?.substring(0, 5);
+    final statusPulang = record['status_pulang'] as String?;
+    final hasClockOutSlot = scheduleJamPulang != null;
 
     final alasanManual = record['alasan_manual'] as String?;
     final isPresent = status == 'Hadir' || status == 'Terlambat';
@@ -633,30 +640,112 @@ class _TimelineItem extends StatelessWidget {
                             ],
                           ),
                         ),
-                        // Clock-in time
+                        // Clock-in time + (clock-out time kalau divisi pakai jam pulang)
                         if (isPresent)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: statusColor.withValues(alpha: 0.15),
-                                width: 1,
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Jam masuk chip
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: statusColor.withValues(alpha: 0.15),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.login_rounded,
+                                          size: 10,
+                                          color: statusColor.withValues(alpha: 0.7),
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          jamMasuk,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w800,
+                                            color: statusColor,
+                                            fontFeatures: const [FontFeature.tabularFigures()],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Jam pulang chip (kalau divisi pakai jam pulang)
+                                  if (hasClockOutSlot) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: jamPulang != null
+                                            ? const Color(0xFF059669).withValues(alpha: 0.08)
+                                            : AppColors.surfaceAlt,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: jamPulang != null
+                                              ? const Color(0xFF059669).withValues(alpha: 0.18)
+                                              : AppColors.border,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.logout_rounded,
+                                            size: 10,
+                                            color: jamPulang != null
+                                                ? const Color(0xFF059669).withValues(alpha: 0.7)
+                                                : AppColors.textMuted,
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            jamPulang ?? '--:--',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w800,
+                                              color: jamPulang != null
+                                                  ? const Color(0xFF059669)
+                                                  : AppColors.textMuted,
+                                              fontFeatures: const [FontFeature.tabularFigures()],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
-                            ),
-                            child: Text(
-                              jamMasuk,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: statusColor,
-                                fontFeatures: const [FontFeature.tabularFigures()],
-                              ),
-                            ),
+                              if (statusPulang == 'Lupa Pulang' || statusPulang == 'Cepat') ...[
+                                const SizedBox(height: 3),
+                                Text(
+                                  statusPulang == 'Lupa Pulang'
+                                      ? 'Lupa absen pulang'
+                                      : 'Pulang lebih awal',
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                       ],
                     ),
@@ -747,11 +836,14 @@ class _TimelineItem extends StatelessWidget {
                             ),
                             const SizedBox(width: 3),
                             Text(
-                              'Jadwal $scheduleTime',
+                              hasClockOutSlot
+                                  ? '$scheduleTime – $scheduleJamPulang'
+                                  : 'Jadwal $scheduleTime',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: AppColors.textSecondary,
                                 fontWeight: FontWeight.w500,
+                                fontFeatures: const [FontFeature.tabularFigures()],
                               ),
                             ),
                           ],
