@@ -589,6 +589,7 @@ abstract final class AttendanceService {
 
       // 3. Hitung status kehadiran menggunakan waktu WIB yang konsisten
       final jamMasukStr = schedule['jam_masuk'] as String;
+      final jamPulangStr = schedule['jam_pulang'] as String?;
       final toleransiMenit = schedule['toleransi_menit'] as int;
       final awalAbsenMenit = (schedule['awal_absen_menit'] as int?) ?? 0;
 
@@ -644,6 +645,7 @@ abstract final class AttendanceService {
         'tanggal': tanggal,
         'jam_masuk': jamMasukRecord,
         'schedule_jam_masuk': jamMasukStr,
+        'schedule_jam_pulang': jamPulangStr,
         'toleransi_menit': toleransiMenit,
         'status': statusResult['status'],
         'durasi_telat': statusResult['durasi_telat'],
@@ -846,6 +848,149 @@ abstract final class AttendanceService {
     } catch (e) {
       debugPrint('[AttendanceService] getRecentActivity error: $e');
       return [];
+    }
+  }
+
+  /// Ambil data absensi pegawai untuk hari ini.
+  ///
+  /// Returns Map dengan keys lengkap:
+  /// - id, jam_masuk, jam_pulang, schedule_jam_masuk, schedule_jam_pulang,
+  ///   status, status_pulang, durasi_telat, division_id, divisions(nama, color)
+  /// Returns null jika belum absen masuk hari ini.
+  static Future<Map<String, dynamic>?> getTodayAttendance({
+    required String employeeId,
+  }) async {
+    try {
+      await SupabaseService.ensureAuthenticated();
+
+      final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
+      final tanggal =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      final response = await SupabaseService.client
+          .from('attendance_records')
+          .select(
+              'id, tanggal, jam_masuk, jam_pulang, schedule_jam_masuk, schedule_jam_pulang, status, status_pulang, durasi_telat, durasi_lembur_menit, division_id, divisions:division_id(nama, color)')
+          .eq('employee_id', employeeId)
+          .eq('tanggal', tanggal)
+          .maybeSingle();
+
+      if (response == null) return null;
+      return Map<String, dynamic>.from(response);
+    } catch (e) {
+      debugPrint('[AttendanceService] getTodayAttendance error: $e');
+      return null;
+    }
+  }
+
+  /// Catat jam pulang (clock-out) pegawai.
+  ///
+  /// Validasi:
+  /// 1. Sudah ada record check-in hari ini (status Hadir/Terlambat).
+  /// 2. Record punya schedule_jam_pulang (divisi menerapkan jam pulang).
+  /// 3. Belum ada jam_pulang sebelumnya.
+  /// 4. Sudah lewat schedule_jam_pulang (tidak boleh pulang awal).
+  ///
+  /// Returns map dengan jam_pulang dan status_pulang yang berhasil ditulis.
+  /// Throws AttendanceException untuk error yang bisa diatasi (UI tampil pesan).
+  static Future<Map<String, dynamic>> recordCheckOut({
+    required String employeeId,
+  }) async {
+    try {
+      await SupabaseService.ensureAuthenticated();
+
+      final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
+      final tanggal =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      // 1. Ambil record hari ini
+      final today = await SupabaseService.client
+          .from('attendance_records')
+          .select(
+              'id, status, jam_pulang, schedule_jam_pulang')
+          .eq('employee_id', employeeId)
+          .eq('tanggal', tanggal)
+          .maybeSingle();
+
+      if (today == null) {
+        throw const AttendanceException(
+          type: AttendanceErrorType.unknown,
+          message: 'Anda belum absen masuk hari ini.',
+        );
+      }
+
+      final status = today['status'] as String?;
+      if (status != 'Hadir' && status != 'Terlambat') {
+        throw const AttendanceException(
+          type: AttendanceErrorType.unknown,
+          message: 'Status absen tidak valid untuk absen pulang.',
+        );
+      }
+
+      final scheduleJamPulang = today['schedule_jam_pulang'] as String?;
+      if (scheduleJamPulang == null) {
+        throw const AttendanceException(
+          type: AttendanceErrorType.unknown,
+          message:
+              'Divisi Anda tidak menerapkan absen pulang. Hubungi admin jika ada pertanyaan.',
+        );
+      }
+
+      if (today['jam_pulang'] != null) {
+        throw const AttendanceException(
+          type: AttendanceErrorType.unknown,
+          message: 'Anda sudah absen pulang hari ini.',
+        );
+      }
+
+      // 2. Cek waktu sekarang vs schedule_jam_pulang (tidak boleh pulang awal)
+      final parts = scheduleJamPulang.split(':');
+      final scheduleTime = DateTime(
+        now.year, now.month, now.day,
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+      );
+
+      if (now.isBefore(scheduleTime)) {
+        final scheduleStr = scheduleJamPulang.length >= 5
+            ? scheduleJamPulang.substring(0, 5)
+            : scheduleJamPulang;
+        throw AttendanceException(
+          type: AttendanceErrorType.tooEarly,
+          message:
+              'Belum waktunya absen pulang. Anda baru bisa absen pulang mulai pukul $scheduleStr WIB.',
+        );
+      }
+
+      // 3. Compute status_pulang (selalu 'Tepat' karena pulang awal di-block).
+      // Field disiapkan untuk kasus admin manual (mis. pulang sakit) dengan status 'Cepat'.
+      const statusPulang = 'Tepat';
+
+      // 4. Format jam pulang (HH:mm:ss)
+      final jamPulangStr =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+
+      // 5. Update record
+      await SupabaseService.client
+          .from('attendance_records')
+          .update({
+            'jam_pulang': jamPulangStr,
+            'status_pulang': statusPulang,
+          })
+          .eq('id', today['id']);
+
+      return {
+        'jam_pulang': jamPulangStr,
+        'status_pulang': statusPulang,
+      };
+    } on AttendanceException {
+      rethrow;
+    } catch (e) {
+      debugPrint('[AttendanceService] recordCheckOut error: $e');
+      throw AttendanceException(
+        type: AttendanceErrorType.databaseError,
+        message: 'Gagal mencatat jam pulang: $e',
+      );
     }
   }
 }

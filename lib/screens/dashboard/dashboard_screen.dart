@@ -25,6 +25,7 @@ import '../attendance/attendance_history_screen.dart';
 import '../attendance/division_picker_sheet.dart';
 import '../attendance/face_verification_screen.dart';
 import '../leave/leave_screen.dart';
+import '../overtime/overtime_screen.dart';
 import '../dokumen/dokumen_screen.dart';
 import '../pengaturan/pengaturan_screen.dart';
 import '../info/info_screen.dart';
@@ -176,6 +177,9 @@ class _DashboardScreenState extends State<DashboardScreen>
             divisionName: divisionName,
             scheduleTime: scheduleTime,
             toleransiMenit: toleransi,
+            scheduleJamPulang: (record['schedule_jam_pulang'] as String?)?.substring(0, 5),
+            clockOutTime: (record['jam_pulang'] as String?)?.substring(0, 5),
+            statusPulang: record['status_pulang'] as String?,
           );
         });
 
@@ -230,6 +234,9 @@ class _DashboardScreenState extends State<DashboardScreen>
             divisionName: divisionName,
             scheduleTime: scheduleTime,
             toleransiMenit: toleransi,
+            scheduleJamPulang: (record['schedule_jam_pulang'] as String?)?.substring(0, 5),
+            clockOutTime: (record['jam_pulang'] as String?)?.substring(0, 5),
+            statusPulang: record['status_pulang'] as String?,
           );
         });
         
@@ -378,6 +385,13 @@ class _DashboardScreenState extends State<DashboardScreen>
           gradient: AppColors.orangeGradient,
           badge: _pendingLeaveCount > 0 ? '$_pendingLeaveCount' : null,
           onTap: () => _onMenuTap('Cuti & Izin'),
+        ),
+        MenuItemModel(
+          title: 'Lembur',
+          subtitle: 'Pengajuan lembur',
+          icon: Icons.access_time_filled_rounded,
+          gradient: AppColors.purpleGradient,
+          onTap: () => _onMenuTap('Lembur'),
         ),
         MenuItemModel(
           title: 'Pendapatan',
@@ -570,6 +584,16 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
         ).then((_) => _fetchPendingLeaveCount());
+        break;
+      case 'Lembur':
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => OvertimeScreen(
+              employeeId: _pegawai.id,
+              employeeName: _pegawai.nama,
+            ),
+          ),
+        );
         break;
       case 'Rekap Titik':
         Navigator.of(context).push(
@@ -1688,6 +1712,9 @@ class _DashboardScreenState extends State<DashboardScreen>
           divisionName: divisionName,
           scheduleTime: scheduleTime,
           toleransiMenit: toleransi,
+          scheduleJamPulang: (result['schedule_jam_pulang'] as String?)?.substring(0, 5),
+          clockOutTime: (result['jam_pulang'] as String?)?.substring(0, 5),
+          statusPulang: result['status_pulang'] as String?,
         );
       });
 
@@ -1740,6 +1767,94 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   OverlayEntry? _loadingOverlay;
 
+  /// Handler tombol "Absen Pulang" untuk pegawai dengan divisi yang
+  /// menerapkan jam pulang. Validasi lokasi & waktu dilakukan di backend
+  /// (recordCheckOut). Face verification akan ditambahkan di iterasi berikutnya.
+  Future<void> _onClockOutTap() async {
+    if (!_hasCheckedIn || _attendanceInfo == null) return;
+    if (!_attendanceInfo!.requiresClockOut || _attendanceInfo!.hasClockedOut) {
+      return;
+    }
+
+    // Konfirmasi dulu
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Absen Pulang Sekarang?'),
+        content: Text(
+          _attendanceInfo!.scheduleJamPulang != null
+              ? 'Pastikan jadwal pulang Anda ${_attendanceInfo!.scheduleJamPulang} sudah terlewat. Lanjutkan?'
+              : 'Lanjutkan absen pulang sekarang?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Absen Pulang'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    _showLoading('Mencatat jam pulang...');
+
+    try {
+      final result = await AttendanceService.recordCheckOut(
+        employeeId: _pegawai.id,
+      );
+      _hideLoading();
+
+      if (!mounted) return;
+
+      final jamPulang = (result['jam_pulang'] as String?)?.substring(0, 5);
+
+      setState(() {
+        _attendanceInfo = AttendanceInfo(
+          clockInTime: _attendanceInfo!.clockInTime,
+          status: _attendanceInfo!.status,
+          durasiTelat: _attendanceInfo!.durasiTelat,
+          divisionName: _attendanceInfo!.divisionName,
+          scheduleTime: _attendanceInfo!.scheduleTime,
+          toleransiMenit: _attendanceInfo!.toleransiMenit,
+          scheduleJamPulang: _attendanceInfo!.scheduleJamPulang,
+          clockOutTime: jamPulang,
+          statusPulang: result['status_pulang'] as String?,
+        );
+      });
+
+      HapticFeedback.mediumImpact();
+      AppNotification.show(
+        context,
+        type: NotificationType.success,
+        title: 'Absen Pulang Tercatat',
+        message: 'Jam pulang $jamPulang WIB tersimpan.',
+      );
+    } on AttendanceException catch (e) {
+      _hideLoading();
+      if (!mounted) return;
+      AppNotification.show(
+        context,
+        type: NotificationType.warning,
+        title: 'Gagal Absen Pulang',
+        message: e.message,
+      );
+    } catch (e) {
+      _hideLoading();
+      if (!mounted) return;
+      AppNotification.show(
+        context,
+        type: NotificationType.error,
+        title: 'Terjadi Kesalahan',
+        message: 'Tidak dapat mencatat jam pulang: $e',
+      );
+    }
+  }
+
   void _showLoading(String message) {
     _loadingOverlay?.remove();
     _loadingOverlay = OverlayEntry(
@@ -1783,6 +1898,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   onAvatarTap: _openProfile,
                   onLogoutTap: _onLogout,
                   onAbsenTap: _onScanFace,
+                  onClockOutTap: _onClockOutTap,
                 ),
               ),
 

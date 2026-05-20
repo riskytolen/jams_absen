@@ -15,6 +15,10 @@ class AttendanceInfo {
   final String divisionName;
   final String? scheduleTime; // Jam masuk jadwal (HH:mm)
   final int toleransiMenit; // Toleransi menit
+  // Clock-out support (untuk divisi yang menerapkan jam pulang)
+  final String? scheduleJamPulang; // Jadwal jam pulang (HH:mm). NULL = divisi tidak wajib absen pulang.
+  final String? clockOutTime;      // Realisasi jam pulang. NULL = belum absen pulang.
+  final String? statusPulang;      // 'Tepat'|'Cepat'|'Lupa Pulang'|null
 
   const AttendanceInfo({
     required this.clockInTime,
@@ -23,6 +27,9 @@ class AttendanceInfo {
     required this.divisionName,
     this.scheduleTime,
     this.toleransiMenit = 0,
+    this.scheduleJamPulang,
+    this.clockOutTime,
+    this.statusPulang,
   });
 
   bool get isLate => status == 'Terlambat';
@@ -30,6 +37,12 @@ class AttendanceInfo {
   bool get isLeave => status == 'Izin' || status == 'Sakit' || status == 'Cuti';
   bool get isAlpha => status == 'Alpha';
   bool get isLibur => status == 'Libur';
+
+  /// Apakah divisi pegawai menerapkan jam pulang.
+  bool get requiresClockOut => scheduleJamPulang != null;
+
+  /// Apakah pegawai sudah absen pulang.
+  bool get hasClockedOut => clockOutTime != null;
 
   /// Batas waktu telat = jadwal + toleransi.
   String? get batasTelatTime {
@@ -79,6 +92,7 @@ class DashboardHeader extends StatelessWidget {
   final VoidCallback? onAvatarTap;
   final VoidCallback? onLogoutTap;
   final VoidCallback? onAbsenTap;
+  final VoidCallback? onClockOutTap;
 
   const DashboardHeader({
     super.key,
@@ -93,6 +107,7 @@ class DashboardHeader extends StatelessWidget {
     this.onAvatarTap,
     this.onLogoutTap,
     this.onAbsenTap,
+    this.onClockOutTap,
   });
 
   @override
@@ -129,6 +144,7 @@ class DashboardHeader extends StatelessWidget {
                 attendanceInfo: attendanceInfo,
                 onAvatarTap: onAvatarTap,
                 onAbsenTap: onAbsenTap,
+                onClockOutTap: onClockOutTap,
               ),
             ],
           ),
@@ -271,6 +287,7 @@ class _MainCard extends StatefulWidget {
   final AttendanceInfo? attendanceInfo;
   final VoidCallback? onAvatarTap;
   final VoidCallback? onAbsenTap;
+  final VoidCallback? onClockOutTap;
 
   const _MainCard({
     required this.userName,
@@ -281,6 +298,7 @@ class _MainCard extends StatefulWidget {
     this.attendanceInfo,
     this.onAvatarTap,
     this.onAbsenTap,
+    this.onClockOutTap,
   });
 
   @override
@@ -483,6 +501,13 @@ class _MainCardState extends State<_MainCard> {
           // ── Status / CTA ──
           if (!widget.hasCheckedIn)
             _AbsenButton(onTap: widget.onAbsenTap)
+          else if (widget.attendanceInfo != null &&
+              widget.attendanceInfo!.requiresClockOut &&
+              !widget.attendanceInfo!.hasClockedOut)
+            _ClockOutButton(
+              info: widget.attendanceInfo!,
+              onTap: widget.onClockOutTap,
+            )
           else
             _StatusCard(info: widget.attendanceInfo!),
         ],
@@ -1015,4 +1040,129 @@ class _ShimmerPainter extends CustomPainter {
   @override
   bool shouldRepaint(_ShimmerPainter oldDelegate) =>
       oldDelegate.progress != progress;
+}
+
+// ═════════════════════════════════════════════════════════
+// CLOCK-OUT BUTTON — Hijau, muncul saat sudah check-in
+// dan divisi wajib absen pulang
+// ═════════════════════════════════════════════════════════
+class _ClockOutButton extends StatefulWidget {
+  final AttendanceInfo info;
+  final VoidCallback? onTap;
+
+  const _ClockOutButton({required this.info, this.onTap});
+
+  @override
+  State<_ClockOutButton> createState() => _ClockOutButtonState();
+}
+
+class _ClockOutButtonState extends State<_ClockOutButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _tapCtrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _tapCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+      reverseDuration: const Duration(milliseconds: 200),
+    );
+    _scale = Tween<double>(begin: 1, end: 0.97).animate(
+      CurvedAnimation(parent: _tapCtrl, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _tapCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheduleStr = widget.info.scheduleJamPulang ?? '';
+    return GestureDetector(
+      onTapDown: (_) => _tapCtrl.forward(),
+      onTapUp: (_) {
+        HapticFeedback.lightImpact();
+        _tapCtrl.reverse();
+        widget.onTap?.call();
+      },
+      onTapCancel: () => _tapCtrl.reverse(),
+      child: ScaleTransition(
+        scale: _scale,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF10B981), Color(0xFF059669)],
+            ),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.logout_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Absen Pulang',
+                      style: AppTextStyles.button.copyWith(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      scheduleStr.isNotEmpty
+                          ? 'Jadwal pulang $scheduleStr WIB'
+                          : 'Verifikasi wajah untuk absen pulang',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white.withValues(alpha: 0.7),
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
