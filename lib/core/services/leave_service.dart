@@ -56,6 +56,8 @@ abstract final class LeaveService {
         'alasan': alasan,
         'lampiran_url': lampiranUrl,
         'status': 'Menunggu',
+        // Self-service: pengajuan dari mobile app oleh pegawai sendiri.
+        'created_by': 'pegawai',
       };
 
       final response = await SupabaseService.client
