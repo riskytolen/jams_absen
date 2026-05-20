@@ -370,22 +370,30 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ── Menu items (2 kolom grid, card per item) ────────────
-  List<MenuItemModel> get _menuItems => [
-        MenuItemModel(
-          title: 'Riwayat',
-          subtitle: 'Riwayat kehadiran',
-          icon: Icons.history_rounded,
-          gradient: AppColors.skyGradient,
-          onTap: () => _onMenuTap('Riwayat Absen'),
-        ),
-        MenuItemModel(
-          title: 'Cuti',
-          subtitle: 'Ajukan permohonan',
-          icon: Icons.event_note_rounded,
-          gradient: AppColors.orangeGradient,
-          badge: _pendingLeaveCount > 0 ? '$_pendingLeaveCount' : null,
-          onTap: () => _onMenuTap('Cuti & Izin'),
-        ),
+  List<MenuItemModel> get _menuItems {
+    // Menu Lembur hanya muncul jika pegawai sudah check-in di divisi
+    // yang menerapkan jam pulang (schedule_jam_pulang IS NOT NULL).
+    final showLembur = _hasCheckedIn &&
+        _attendanceInfo != null &&
+        _attendanceInfo!.requiresClockOut;
+
+    return [
+      MenuItemModel(
+        title: 'Riwayat',
+        subtitle: 'Riwayat kehadiran',
+        icon: Icons.history_rounded,
+        gradient: AppColors.skyGradient,
+        onTap: () => _onMenuTap('Riwayat Absen'),
+      ),
+      MenuItemModel(
+        title: 'Cuti',
+        subtitle: 'Ajukan permohonan',
+        icon: Icons.event_note_rounded,
+        gradient: AppColors.orangeGradient,
+        badge: _pendingLeaveCount > 0 ? '$_pendingLeaveCount' : null,
+        onTap: () => _onMenuTap('Cuti & Izin'),
+      ),
+      if (showLembur)
         MenuItemModel(
           title: 'Lembur',
           subtitle: 'Pengajuan lembur',
@@ -393,14 +401,14 @@ class _DashboardScreenState extends State<DashboardScreen>
           gradient: AppColors.purpleGradient,
           onTap: () => _onMenuTap('Lembur'),
         ),
-        MenuItemModel(
-          title: 'Pendapatan',
-          subtitle: 'Slip gaji & bonus',
-          icon: Icons.account_balance_wallet_rounded,
-          gradient: AppColors.tealGradient,
-          badge: 'Soon',
-          onTap: () => _onMenuTap('Pendapatan'),
-        ),
+      MenuItemModel(
+        title: 'Pendapatan',
+        subtitle: 'Slip gaji & bonus',
+        icon: Icons.account_balance_wallet_rounded,
+        gradient: AppColors.tealGradient,
+        badge: 'Soon',
+        onTap: () => _onMenuTap('Pendapatan'),
+      ),
         MenuItemModel(
           title: 'Info',
           subtitle: 'Info perusahaan',
@@ -438,6 +446,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           onTap: () => _onMenuTap('Pengaturan'),
         ),
       ];
+  }
 
   // ── Recent activities (dari database) ──────────────────
   List<ActivityItem> get _activities {
