@@ -1,7 +1,7 @@
 name: jams_absen
 description: "JamsAbsen - Smart Attendance System"
 publish_to: 'none'
-version: 1.8.0+9
+version: 1.9.0+10
 
 environment:
   sdk: ^3.11.4
