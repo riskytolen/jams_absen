@@ -703,16 +703,12 @@ class _StatusCard extends StatelessWidget {
           ),
 
           // ═══ Time slots (masuk + pulang jika applicable) ═══
+          // Footer di bawah selalu memegang bottom radius, jadi time slots
+          // tidak perlu radius sendiri.
           if (info.isPresent)
             Container(
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.vertical(
-                  bottom: hasClockOutSlot
-                      ? Radius.zero
-                      : const Radius.circular(16),
-                  top: Radius.zero,
-                ),
               ),
               child: Row(
                 children: [
