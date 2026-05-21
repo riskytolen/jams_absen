@@ -732,11 +732,12 @@ class _OvertimeFormState extends State<_OvertimeForm> {
               ),
             ),
             const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   // Tanggal
                   Text('Tanggal Lembur',
                       style: AppTextStyles.label.copyWith(fontSize: 12)),
@@ -887,6 +888,7 @@ class _OvertimeFormState extends State<_OvertimeForm> {
                     ),
                   ),
                 ],
+                ),
               ),
             ),
           ],
