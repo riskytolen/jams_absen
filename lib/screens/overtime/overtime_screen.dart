@@ -670,13 +670,16 @@ class _OvertimeFormState extends State<_OvertimeForm> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    final safeBottom = MediaQuery.of(context).viewPadding.bottom;
     final menit = (_jamMulai != null && _jamSelesai != null)
         ? _diffMinutes(_jamMulai!, _jamSelesai!)
         : 0;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: bottom),
+      // Saat keyboard terbuka, pakai keyboardInset.
+      // Saat keyboard tertutup, pakai safeBottom (gesture bar HP).
+      padding: EdgeInsets.only(bottom: keyboardInset > 0 ? keyboardInset : safeBottom),
       child: Container(
         decoration: const BoxDecoration(
           color: AppColors.surface,
