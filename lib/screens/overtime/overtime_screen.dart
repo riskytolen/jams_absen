@@ -361,6 +361,7 @@ class _OvertimeCard extends StatelessWidget {
     final total = request['total_lembur'] as int? ?? 0;
     final alasan = request['alasan'] as String?;
     final catatan = request['catatan_approval'] as String?;
+    final approverNama = request['approved_by_nama'] as String?;
 
     final statusColor = _statusColor(status);
 
@@ -498,6 +499,50 @@ class _OvertimeCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ],
+          // Approver info — tampil kalau status sudah diputuskan & approver ada
+          if ((status == 'Disetujui' || status == 'Ditolak') &&
+              approverNama != null &&
+              approverNama.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: statusColor.withValues(alpha: 0.18),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.person_outline_rounded, size: 12, color: statusColor),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: AppColors.textSecondary,
+                        ),
+                        children: [
+                          TextSpan(text: status == 'Disetujui' ? 'Disetujui oleh ' : 'Ditolak oleh '),
+                          TextSpan(
+                            text: approverNama,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: statusColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
           if (onCancel != null) ...[

@@ -389,6 +389,7 @@ class _LeaveCard extends StatelessWidget {
     final approvedAt = request['approved_at'] != null
         ? DateTime.parse(request['approved_at'] as String)
         : null;
+    final approverNama = request['approved_by_nama'] as String?;
     final durasi = tanggalSelesai.difference(tanggalMulai).inDays + 1;
 
     final IconData jenisIcon;
@@ -672,6 +673,7 @@ class _LeaveCard extends StatelessWidget {
               status: status,
               createdAt: createdAt,
               approvedAt: approvedAt,
+              approverNama: approverNama,
             ),
           ),
         ],
@@ -712,20 +714,18 @@ class _ProgressTimeline extends StatelessWidget {
   final String status;
   final DateTime createdAt;
   final DateTime? approvedAt;
+  final String? approverNama;
 
   const _ProgressTimeline({
     required this.status,
     required this.createdAt,
     this.approvedAt,
+    this.approverNama,
   });
 
   @override
   Widget build(BuildContext context) {
     // Determine step states
-    // Step 1: Diajukan (always completed)
-    // Step 2: Menunggu (completed if status != Menunggu, active if Menunggu)
-    // Step 3: Disetujui/Ditolak (completed if final, inactive if Menunggu)
-
     final bool step1Done = true;
     final bool step2Active = status == 'Menunggu';
     final bool step2Done = status == 'Disetujui' || status == 'Ditolak';
@@ -749,55 +749,112 @@ class _ProgressTimeline extends StatelessWidget {
       step3Icon = Icons.help_outline_rounded;
     }
 
-    return Row(
+    // Subtitle untuk step 3: tanggal + nama approver kalau ada
+    String step3Subtitle;
+    if (approvedAt != null) {
+      step3Subtitle = DateFormat('dd/MM', 'id_ID').format(approvedAt!);
+    } else {
+      step3Subtitle = '-';
+    }
+
+    return Column(
       children: [
-        // Step 1: Diajukan
-        _TimelineStep(
-          icon: Icons.send_rounded,
-          label: 'Diajukan',
-          subtitle: DateFormat('dd/MM', 'id_ID').format(createdAt),
-          color: const Color(0xFF2563EB),
-          isCompleted: step1Done,
-          isActive: false,
-        ),
+        Row(
+          children: [
+            // Step 1: Diajukan
+            _TimelineStep(
+              icon: Icons.send_rounded,
+              label: 'Diajukan',
+              subtitle: DateFormat('dd/MM', 'id_ID').format(createdAt),
+              color: const Color(0xFF2563EB),
+              isCompleted: step1Done,
+              isActive: false,
+            ),
 
-        // Connector 1→2
-        Expanded(
-          child: _TimelineConnector(
-            isCompleted: step2Done || step2Active,
-            isActive: step2Active,
+            // Connector 1→2
+            Expanded(
+              child: _TimelineConnector(
+                isCompleted: step2Done || step2Active,
+                isActive: step2Active,
+              ),
+            ),
+
+            // Step 2: Menunggu
+            _TimelineStep(
+              icon: Icons.hourglass_top_rounded,
+              label: 'Diproses',
+              subtitle: step2Active ? 'Menunggu' : (step2Done ? 'Selesai' : '-'),
+              color: const Color(0xFFD97706),
+              isCompleted: step2Done,
+              isActive: step2Active,
+            ),
+
+            // Connector 2→3
+            Expanded(
+              child: _TimelineConnector(
+                isCompleted: step3Done,
+                isActive: false,
+              ),
+            ),
+
+            // Step 3: Hasil
+            _TimelineStep(
+              icon: step3Icon,
+              label: step3Label,
+              subtitle: step3Subtitle,
+              color: step3Color,
+              isCompleted: step3Done,
+              isActive: false,
+            ),
+          ],
+        ),
+        // Approver info (kalau sudah ada keputusan)
+        if (step3Done && approverNama != null && approverNama!.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: step3Color.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: step3Color.withValues(alpha: 0.18),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.person_outline_rounded,
+                  size: 13,
+                  color: step3Color,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                      children: [
+                        const TextSpan(text: 'oleh '),
+                        TextSpan(
+                          text: approverNama!,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: step3Color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-
-        // Step 2: Menunggu
-        _TimelineStep(
-          icon: Icons.hourglass_top_rounded,
-          label: 'Diproses',
-          subtitle: step2Active ? 'Menunggu' : (step2Done ? 'Selesai' : '-'),
-          color: const Color(0xFFD97706),
-          isCompleted: step2Done,
-          isActive: step2Active,
-        ),
-
-        // Connector 2→3
-        Expanded(
-          child: _TimelineConnector(
-            isCompleted: step3Done,
-            isActive: false,
-          ),
-        ),
-
-        // Step 3: Hasil
-        _TimelineStep(
-          icon: step3Icon,
-          label: step3Label,
-          subtitle: approvedAt != null
-              ? DateFormat('dd/MM', 'id_ID').format(approvedAt!)
-              : '-',
-          color: step3Color,
-          isCompleted: step3Done,
-          isActive: false,
-        ),
+        ],
       ],
     );
   }
