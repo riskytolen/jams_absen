@@ -16,7 +16,7 @@ abstract final class DeliveryPointService {
 
       final response = await SupabaseService.client
           .from('delivery_points')
-          .select('*, divisions(nama, color)')
+          .select('*, delivery_zones(nama, color)')
           .eq('employee_id', employeeId)
           .gte('tanggal', startDate)
           .lte('tanggal', endDate)

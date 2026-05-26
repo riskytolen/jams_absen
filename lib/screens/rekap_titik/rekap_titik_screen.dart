@@ -6,7 +6,7 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/services/delivery_point_service.dart';
 import '../../core/services/server_time_service.dart';
 
-/// Screen rekap titik pengiriman — menampilkan data delivery points
+/// Screen rekap titik pengiriman â€” menampilkan data delivery points
 /// per bulan dengan ringkasan dan daftar detail.
 class RekapTitikScreen extends StatefulWidget {
   final String employeeId;
@@ -44,7 +44,7 @@ class _RekapTitikScreenState extends State<RekapTitikScreen> {
   }
 
   /// Hitung periode aktif berdasarkan tanggal hari ini.
-  /// Periode: tanggal 8 bulan ini — tanggal 7 bulan depan.
+  /// Periode: tanggal 8 bulan ini â€” tanggal 7 bulan depan.
   void _initPeriod() {
     final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
     if (now.day >= 8) {
@@ -95,7 +95,7 @@ class _RekapTitikScreenState extends State<RekapTitikScreen> {
   String get _periodLabel {
     final startLabel = DateFormat('dd MMM', 'id_ID').format(_periodStart);
     final endLabel = DateFormat('dd MMM yyyy', 'id_ID').format(_periodEnd);
-    return '$startLabel — $endLabel';
+    return '$startLabel â€” $endLabel';
   }
 
   @override
@@ -358,9 +358,9 @@ class _RekapTitikScreenState extends State<RekapTitikScreen> {
   }
 }
 
-// ═════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // MONTH ARROW BUTTON
-// ═════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 class _MonthArrowButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
@@ -387,9 +387,9 @@ class _MonthArrowButton extends StatelessWidget {
   }
 }
 
-// ═════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // SUMMARY CARD
-// ═════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 class _SummaryCard extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -444,9 +444,9 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-// ═════════════════════════════════════════════════════════
-// DATE GROUP CARD — Kelompok per tanggal (expandable)
-// ═════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// DATE GROUP CARD â€” Kelompok per tanggal (expandable)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 class _DateGroupCard extends StatefulWidget {
   final String dateStr;
   final List<Map<String, dynamic>> items;
@@ -495,7 +495,7 @@ class _DateGroupCardState extends State<_DateGroupCard>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Date Header (Tap to expand) ──
+          // â”€â”€ Date Header (Tap to expand) â”€â”€
           GestureDetector(
             onTap: () {
               HapticFeedback.lightImpact();
@@ -567,7 +567,7 @@ class _DateGroupCardState extends State<_DateGroupCard>
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '${widget.items.length} divisi',
+                              '${widget.items.length} titik',
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
@@ -637,12 +637,12 @@ class _DateGroupCardState extends State<_DateGroupCard>
             ),
           ),
 
-          // ── Expandable detail ──
+          // â”€â”€ Expandable detail â”€â”€
           AnimatedCrossFade(
             firstChild: const SizedBox.shrink(),
             secondChild: Column(
               children: [
-                // List items per divisi
+                // List items per nama titik
                 ...widget.items.asMap().entries.map((entry) {
                   final index = entry.key;
                   final point = entry.value;
@@ -654,7 +654,7 @@ class _DateGroupCardState extends State<_DateGroupCard>
                   );
                 }),
 
-                // Footer — total pendapatan hari
+                // Footer â€” total pendapatan hari
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -700,9 +700,9 @@ class _DateGroupCardState extends State<_DateGroupCard>
   }
 }
 
-// ═════════════════════════════════════════════════════════
-// POINT ITEM ROW — Satu baris per divisi dalam group
-// ═════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// POINT ITEM ROW â€” Satu baris per nama titik dalam group
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 class _PointItemRow extends StatelessWidget {
   final Map<String, dynamic> point;
   final NumberFormat currencyFormat;
@@ -722,11 +722,11 @@ class _PointItemRow extends StatelessWidget {
     final ratePerPoint = point['rate_per_point'] as int? ?? 0;
     final catatan = point['catatan'] as String?;
 
-    // Division info
-    final division = point['divisions'] as Map<String, dynamic>?;
-    final divisionName = division?['nama'] as String? ?? 'Unknown';
-    final divisionColorHex = division?['color'] as String? ?? '#3b82f6';
-    final divisionColor = _hexToColor(divisionColorHex);
+    // Zone (nama titik) info
+    final zone = point['delivery_zones'] as Map<String, dynamic>?;
+    final zoneName = zone?['nama'] as String? ?? 'Unknown';
+    final zoneColorHex = zone?['color'] as String? ?? '#3b82f6';
+    final zoneColor = _hexToColor(zoneColorHex);
 
     // Role styling
     final bool isDriver = role == 'Driver';
@@ -744,40 +744,40 @@ class _PointItemRow extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: divisionColor.withValues(alpha: 0.03),
+              color: zoneColor.withValues(alpha: 0.03),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: divisionColor.withValues(alpha: 0.1),
+                color: zoneColor.withValues(alpha: 0.1),
                 width: 1,
               ),
             ),
             child: Column(
               children: [
-                // Top row: Division name + role + total
+                // Top row: Zone name + role + total
                 Row(
                   children: [
-                    // Division color dot
+                    // Zone color dot
                     Container(
                       width: 30,
                       height: 30,
                       decoration: BoxDecoration(
-                        color: divisionColor.withValues(alpha: 0.12),
+                        color: zoneColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(
                         Icons.local_shipping_rounded,
                         size: 14,
-                        color: divisionColor,
+                        color: zoneColor,
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Division name + role badge
+                    // Zone name + role badge
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            divisionName,
+                            zoneName,
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
