@@ -6,7 +6,7 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/services/delivery_point_service.dart';
 import '../../core/services/server_time_service.dart';
 
-/// Screen rekap titik pengiriman â€” menampilkan data delivery points
+/// Screen rekap titik pengiriman s/d menampilkan data delivery points
 /// per bulan dengan ringkasan dan daftar detail.
 class RekapTitikScreen extends StatefulWidget {
   final String employeeId;
@@ -44,7 +44,7 @@ class _RekapTitikScreenState extends State<RekapTitikScreen> {
   }
 
   /// Hitung periode aktif berdasarkan tanggal hari ini.
-  /// Periode: tanggal 8 bulan ini â€” tanggal 7 bulan depan.
+  /// Periode: tanggal 8 bulan ini s/d tanggal 7 bulan depan.
   void _initPeriod() {
     final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
     if (now.day >= 8) {
@@ -95,7 +95,7 @@ class _RekapTitikScreenState extends State<RekapTitikScreen> {
   String get _periodLabel {
     final startLabel = DateFormat('dd MMM', 'id_ID').format(_periodStart);
     final endLabel = DateFormat('dd MMM yyyy', 'id_ID').format(_periodEnd);
-    return '$startLabel â€” $endLabel';
+    return '$startLabel s/d $endLabel';
   }
 
   @override
@@ -445,7 +445,7 @@ class _SummaryCard extends StatelessWidget {
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// DATE GROUP CARD â€” Kelompok per tanggal (expandable)
+// DATE GROUP CARD s/d Kelompok per tanggal (expandable)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 class _DateGroupCard extends StatefulWidget {
   final String dateStr;
@@ -654,7 +654,7 @@ class _DateGroupCardState extends State<_DateGroupCard>
                   );
                 }),
 
-                // Footer â€” total pendapatan hari
+                // Footer s/d total pendapatan hari
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -701,7 +701,7 @@ class _DateGroupCardState extends State<_DateGroupCard>
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// POINT ITEM ROW â€” Satu baris per nama titik dalam group
+// POINT ITEM ROW s/d Satu baris per nama titik dalam group
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 class _PointItemRow extends StatelessWidget {
   final Map<String, dynamic> point;
