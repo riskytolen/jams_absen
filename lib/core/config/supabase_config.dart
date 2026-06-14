@@ -17,21 +17,24 @@ abstract final class SupabaseConfig {
   );
 
   /// Supabase anon (public) key — aman untuk client-side.
+  /// Gunakan publishable key baru (--dart-define saat build).
   static const supabaseAnonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
     defaultValue:
-        '[REDACTED]',
+        'sb_publishable_m299cjH9UFkF0J429f8Xew_jOk2pahO',
   );
 
   /// Email untuk autentikasi background (melewati RLS).
+  /// HARUS di-pass via --dart-define saat build, jangan hardcode.
   static const serviceEmail = String.fromEnvironment(
     'SUPABASE_SERVICE_EMAIL',
-    defaultValue: 'pegawai@jamslogistic.com',
+    defaultValue: '',
   );
 
   /// Password untuk autentikasi background.
+  /// HARUS di-pass via --dart-define saat build, jangan hardcode.
   static const servicePassword = String.fromEnvironment(
     'SUPABASE_SERVICE_PASSWORD',
-    defaultValue: '[REDACTED]',
+    defaultValue: '',
   );
 }
