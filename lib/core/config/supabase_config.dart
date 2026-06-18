@@ -17,11 +17,10 @@ abstract final class SupabaseConfig {
   );
 
   /// Supabase anon (public) key — aman untuk client-side.
-  /// Gunakan publishable key baru (--dart-define saat build).
   static const supabaseAnonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
     defaultValue:
-        'sb_publishable_m299cjH9UFkF0J429f8Xew_jOk2pahO',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNub3Z2dWNzbWV3d2JybmdndmVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NzU4MDYsImV4cCI6MjA5MjM1MTgwNn0.M6x1vcQKN_cJGM0B__2XE_ggcC8kro9Ch0r5qdyvW3k',
   );
 
   /// Email untuk autentikasi background (melewati RLS).
