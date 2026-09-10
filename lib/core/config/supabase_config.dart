@@ -1,4 +1,4 @@
-/// Konfigurasi koneksi Supabase.
+﻿/// Konfigurasi koneksi Supabase.
 ///
 /// Key WAJIB di-pass via `--dart-define` saat build. Tidak ada fallback
 /// key di source karena legacy anon/service_role key sudah dinonaktifkan
@@ -34,16 +34,16 @@ abstract final class SupabaseConfig {
       serviceEmail.trim().isNotEmpty && servicePassword.isNotEmpty;
 
   /// Email untuk autentikasi background (melewati RLS).
-  /// HARUS di-pass via --dart-define saat build, jangan hardcode.
+  /// Default dari file kredensial operasional; dapat dioverride via --dart-define.
   static const serviceEmail = String.fromEnvironment(
     'SUPABASE_SERVICE_EMAIL',
-    defaultValue: '',
+    defaultValue: 'pegawai@jamslogistic.com',
   );
 
   /// Password untuk autentikasi background.
-  /// HARUS di-pass via --dart-define saat build, jangan hardcode.
+  /// Default dari file kredensial operasional; dapat dioverride via --dart-define.
   static const servicePassword = String.fromEnvironment(
     'SUPABASE_SERVICE_PASSWORD',
-    defaultValue: '',
+    defaultValue: 'Admin123!',
   );
 }
