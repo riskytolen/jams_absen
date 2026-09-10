@@ -407,7 +407,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         subtitle: 'Slip gaji & bonus',
         icon: Icons.account_balance_wallet_rounded,
         gradient: AppColors.tealGradient,
-        badge: 'Soon',
         onTap: () => _onMenuTap('Pendapatan'),
       ),
         MenuItemModel(
