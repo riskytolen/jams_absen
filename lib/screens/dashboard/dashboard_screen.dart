@@ -27,6 +27,7 @@ import '../attendance/face_verification_screen.dart';
 import '../leave/leave_screen.dart';
 import '../overtime/overtime_screen.dart';
 import '../dokumen/dokumen_screen.dart';
+import '../payroll/payroll_screen.dart';
 import '../pengaturan/pengaturan_screen.dart';
 import '../info/info_screen.dart';
 import '../rekap_titik/rekap_titik_screen.dart';
@@ -632,7 +633,14 @@ class _DashboardScreenState extends State<DashboardScreen>
         ).then((_) => _fetchAnnouncementCount());
         break;
       case 'Pendapatan':
-        _showComingSoonDialog();
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PayrollScreen(
+              employeeId: _pegawai.id,
+              employeeName: _pegawai.nama,
+            ),
+          ),
+        );
         break;
       case 'Pengaturan':
         Navigator.of(context).push(
@@ -1112,156 +1120,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               );
             },
-          ),
-        );
-      },
-    );
-  }
-
-  void _showComingSoonDialog() {
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Coming Soon',
-      barrierColor: Colors.black.withValues(alpha: 0.6),
-      transitionDuration: const Duration(milliseconds: 300),
-      transitionBuilder: (_, anim, _, child) {
-        return ScaleTransition(
-          scale: CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
-          child: FadeTransition(opacity: anim, child: child),
-        );
-      },
-      pageBuilder: (ctx, _, _) {
-        return Center(
-          child: Container(
-            width: 300,
-            margin: const EdgeInsets.symmetric(horizontal: 24),
-            padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  blurRadius: 40,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Animated icon
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.tealGradient,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF0D9488).withValues(alpha: 0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.rocket_launch_rounded,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Title
-                  const Text(
-                    'Segera Hadir!',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Description
-                  Text(
-                    'Fitur Pendapatan sedang dalam tahap pengembangan. Anda akan bisa melihat slip gaji, bonus, dan rincian pendapatan di sini.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.textSecondary,
-                      height: 1.5,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 6),
-
-                  // Coming soon badge
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0D9488).withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: const Color(0xFF0D9488).withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.schedule_rounded,
-                          size: 14,
-                          color: Color(0xFF0D9488),
-                        ),
-                        SizedBox(width: 6),
-                        Text(
-                          'Coming Soon',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF0D9488),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Close button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 44,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'Mengerti',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
         );
       },
