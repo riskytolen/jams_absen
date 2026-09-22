@@ -82,6 +82,12 @@ class EpodAssignment {
         return 'Driver';
       case 'HELPER':
         return 'Helper';
+      case 'COORDINATOR':
+        return 'Koordinator';
+      case 'DEPUTY_COORDINATOR':
+        return 'Wakil Koordinator';
+      case 'OTHER':
+        return 'Petugas';
       default:
         return '-';
     }

@@ -25,7 +25,10 @@ class EpodOverview {
 
   bool get isDriver => role == 'DRIVER';
   bool get isHelper => role == 'HELPER';
-  bool get isEligible => isDriver || isHelper;
+  bool get isCoordinator => role == 'COORDINATOR';
+  bool get isDeputyCoordinator => role == 'DEPUTY_COORDINATOR';
+  bool get isEligible =>
+      isDriver || isHelper || isCoordinator || isDeputyCoordinator;
   bool get hasActiveAssignment => mine.isNotEmpty;
 }
 

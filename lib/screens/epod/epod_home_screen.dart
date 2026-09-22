@@ -164,7 +164,20 @@ class _EpodHomeScreenState extends State<EpodHomeScreen> {
     );
   }
 
-  String _roleLabel(String? role) => role == 'HELPER' ? 'Helper' : 'Driver';
+  String _roleLabel(String? role) {
+    switch (role) {
+      case 'HELPER':
+        return 'Helper';
+      case 'COORDINATOR':
+        return 'Koordinator';
+      case 'DEPUTY_COORDINATOR':
+        return 'Wakil Koordinator';
+      case 'DRIVER':
+        return 'Driver';
+      default:
+        return 'Petugas';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -346,10 +359,10 @@ class _EpodHomeScreenState extends State<EpodHomeScreen> {
     if (!_overview.isEligible) {
       return _buildMessage(
         icon: Icons.badge_rounded,
-        title: 'Bukan Driver/Helper',
+        title: 'Jabatan Tidak Terdaftar',
         message:
-            'Akun Anda belum terdaftar sebagai Driver atau Helper, sehingga '
-            'e-POD tidak tersedia.',
+            'Akun Anda belum terdaftar sebagai Driver, Helper, Koordinator, '
+            'atau Wakil Koordinator, sehingga e-POD tidak tersedia.',
         onRetry: _load,
       );
     }
