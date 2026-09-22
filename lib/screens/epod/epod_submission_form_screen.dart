@@ -454,95 +454,247 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
   Widget _buildReviewSection() {
     final current = widget.stop.current;
     final photos = widget.existingEvidence;
+    final outOfRadius = current?.geofenceOk == false;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Section(
-          title: 'Bukti Tersimpan',
-          subtitle: current == null
-              ? null
-              : 'Bukti v${current.version} • ${current.resultLabel}',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        // ── Status hero ──
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.base),
+          decoration: BoxDecoration(
+            color: AppColors.successBg,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            border: Border.all(
+              color: AppColors.success.withValues(alpha: 0.35),
+            ),
+          ),
+          child: Row(
             children: [
-              if (photos.isNotEmpty) ...[
-                SizedBox(
-                  height: 84,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: photos.length,
-                    separatorBuilder: (_, _) =>
-                        const SizedBox(width: AppSpacing.sm),
-                    itemBuilder: (_, index) => ClipRRect(
-                      borderRadius:
-                          BorderRadius.circular(AppSpacing.radiusMd),
-                      child: Image.network(
-                        photos[index].url,
-                        width: 84,
-                        height: 84,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
-                          width: 84,
-                          height: 84,
-                          color: AppColors.surfaceDim,
-                          child: const Icon(Icons.broken_image_rounded,
-                              color: AppColors.textMuted),
-                        ),
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: AppColors.success,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check_rounded,
+                    size: 24, color: Colors.white),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      current?.resultLabel ?? 'Selesai',
+                      style: AppTextStyles.h4.copyWith(
+                        fontSize: 16,
+                        color: AppColors.success,
                       ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Bukti v${current?.version ?? 1}'
+                      '${current?.capturedAtServer != null ? ' • ${_formatReviewDateTime(current!.capturedAtServer!)}' : ''}',
+                      style: AppTextStyles.labelSm,
+                    ),
+                  ],
+                ),
+              ),
+              if (outOfRadius)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.warningBg,
+                    borderRadius:
+                        BorderRadius.circular(AppSpacing.radiusFull),
+                    border: Border.all(
+                      color:
+                          AppColors.warning.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: const Text(
+                    'Di luar radius',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.warning,
                     ),
                   ),
                 ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              if (current?.result != null)
-                _InfoLine(
-                  icon: Icons.local_shipping_rounded,
-                  label: 'Hasil',
-                  value: current!.resultLabel,
-                  tone: AppColors.success,
-                ),
-              if (current?.recipientName != null) ...[
-                const SizedBox(height: 6),
-                _InfoLine(
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.base),
+        // ── Foto bukti ──
+        _Section(
+          title: 'Foto Bukti',
+          subtitle: photos.isEmpty
+              ? 'Foto tidak tersedia'
+              : '${photos.length} foto',
+          child: photos.isEmpty
+              ? Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceDim,
+                        borderRadius: BorderRadius.circular(
+                            AppSpacing.radiusMd),
+                      ),
+                      child: const Icon(Icons.image_not_supported_rounded,
+                          color: AppColors.textMuted),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'Foto tersimpan tidak dapat dimuat saat ini.',
+                        style: AppTextStyles.bodySm,
+                      ),
+                    ),
+                  ],
+                )
+              : photos.length == 1
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusMd),
+                      child: Image.network(
+                        photos.first.url,
+                        width: double.infinity,
+                        height: 220,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          width: double.infinity,
+                          height: 120,
+                          color: AppColors.surfaceDim,
+                          alignment: Alignment.center,
+                          child: const Icon(
+                              Icons.broken_image_rounded,
+                              color: AppColors.textMuted),
+                        ),
+                      ),
+                    )
+                  : SizedBox(
+                      height: 96,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: photos.length,
+                        separatorBuilder: (_, _) => const SizedBox(
+                            width: AppSpacing.sm),
+                        itemBuilder: (_, index) => ClipRRect(
+                          borderRadius: BorderRadius.circular(
+                              AppSpacing.radiusMd),
+                          child: Image.network(
+                            photos[index].url,
+                            width: 96,
+                            height: 96,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => Container(
+                              width: 96,
+                              height: 96,
+                              color: AppColors.surfaceDim,
+                              child: const Icon(
+                                  Icons.broken_image_rounded,
+                                  color: AppColors.textMuted),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+        ),
+        const SizedBox(height: AppSpacing.base),
+        // ── Detail pengiriman ──
+        _Section(
+          title: 'Detail Pengiriman',
+          child: Column(
+            children: [
+              if (current?.recipientName != null)
+                _ReviewInfoTile(
                   icon: Icons.person_rounded,
                   label: 'Penerima',
                   value: current!.recipientName!,
                 ),
-              ],
-              if ((current?.note ?? '').isNotEmpty) ...[
-                const SizedBox(height: 6),
-                _InfoLine(
+              if ((current?.note ?? '').isNotEmpty)
+                _ReviewInfoTile(
                   icon: Icons.note_rounded,
                   label: 'Catatan',
                   value: current!.note!,
                 ),
-              ],
-              if (current != null && current.items.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                _InfoLine(
-                  icon: Icons.inventory_2_rounded,
-                  label: 'Barang',
-                  value: current.items
-                      .map((item) => '${item.name} (${item.summary})')
-                      .join(', '),
-                ),
-              ],
-              if (current?.distanceMeters != null) ...[
-                const SizedBox(height: 6),
-                _InfoLine(
+              if (current?.distanceMeters != null)
+                _ReviewInfoTile(
                   icon: Icons.place_rounded,
                   label: 'Jarak saat kirim',
-                  value:
-                      '${current!.distanceMeters!.toStringAsFixed(0)} m',
+                  value: _formatHumanDistance(
+                      current!.distanceMeters!),
                 ),
-              ],
-              if (current?.capturedAtServer != null) ...[
-                const SizedBox(height: 6),
-                _InfoLine(
-                  icon: Icons.schedule_rounded,
-                  label: 'Waktu kirim',
-                  value: _formatReviewDateTime(current!.capturedAtServer!),
+              if (current != null && current.items.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                const Divider(height: 1),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    const Icon(Icons.inventory_2_rounded,
+                        size: 16, color: AppColors.textMuted),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Barang (${current.items.length})',
+                      style: AppTextStyles.label.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                for (final item in current.items) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusMd),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.name,
+                            style: AppTextStyles.label.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentBg,
+                            borderRadius: BorderRadius.circular(
+                                AppSpacing.radiusFull),
+                          ),
+                          child: Text(
+                            item.summary,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.accent,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                ],
               ],
             ],
           ),
@@ -550,21 +702,45 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
         const SizedBox(height: AppSpacing.base),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
           decoration: BoxDecoration(
             color: AppColors.warningBg,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            borderRadius:
+                BorderRadius.circular(AppSpacing.radiusMd),
             border: Border.all(
-                color: AppColors.warning.withValues(alpha: 0.35)),
+                color: AppColors.warning.withValues(alpha: 0.3)),
           ),
-          child: const Text(
-            'Kirim ulang akan menggantikan bukti ini dengan versi baru. '
-            'Foto wajib dilampirkan ulang dan lokasi akan diambil kembali.',
-            style: TextStyle(fontSize: 12, color: AppColors.warning),
+          child: const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline_rounded,
+                  size: 15, color: AppColors.warning),
+              SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Kirim ulang mengganti bukti ini. Foto dan lokasi wajib diambil ulang.',
+                  style: TextStyle(
+                      fontSize: 11, color: AppColors.warning),
+                ),
+              ),
+            ],
           ),
         ),
       ],
     );
+  }
+
+  /// Jarak ramah baca: meter di bawah 1 km, kilometer di atasnya.
+  String _formatHumanDistance(double meters) {
+    if (meters < 1000) return '${meters.toStringAsFixed(0)} m';
+    final km = meters / 1000;
+    final text = km >= 100
+        ? km.toStringAsFixed(0)
+        : km.toStringAsFixed(1).replaceAll('.', ',');
+    return '$text km';
   }
 
   String _formatReviewDateTime(DateTime value) {
@@ -1115,6 +1291,57 @@ class _InfoLine extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Baris info mode lihat bukti: ikon + label kecil di atas value tebal.
+class _ReviewInfoTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _ReviewInfoTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.accentBg,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            child: Icon(icon, size: 15, color: AppColors.accent),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: AppTextStyles.caption),
+                const SizedBox(height: 1),
+                Text(
+                  value,
+                  style: AppTextStyles.label.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
