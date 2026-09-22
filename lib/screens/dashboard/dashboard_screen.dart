@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../core/services/announcement_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/document_service.dart';
+import '../../core/services/epod_service.dart';
 import '../../core/services/update_service.dart';
 import '../../core/services/attendance_service.dart';
 import '../../core/services/attendance_realtime_service.dart';
@@ -27,6 +28,7 @@ import '../attendance/face_verification_screen.dart';
 import '../leave/leave_screen.dart';
 import '../overtime/overtime_screen.dart';
 import '../dokumen/dokumen_screen.dart';
+import '../epod/epod_home_screen.dart';
 import '../payroll/payroll_screen.dart';
 import '../pengaturan/pengaturan_screen.dart';
 import '../info/info_screen.dart';
@@ -67,6 +69,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   // SP (Surat Peringatan) aktif
   Map<String, dynamic>? _activeSP;
 
+  // Role e-POD mobile: 'DRIVER', 'HELPER', atau null.
+  String? _epodRole;
+
   @override
   void initState() {
     super.initState();
@@ -96,6 +101,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       _fetchAnnouncementCount(),
       _fetchStatsAndActivity(),
       _fetchActiveSP(),
+      _fetchEpodRole(),
       _refreshPegawaiData(),
     ]);
 
@@ -278,6 +284,14 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
+  /// Cek role e-POD mobile pegawai (Driver/Helper) untuk gate menu.
+  Future<void> _fetchEpodRole() async {
+    final role = await EpodService.getRole(_pegawai.id);
+    if (mounted) {
+      setState(() => _epodRole = role);
+    }
+  }
+
   /// Hitung periode aktif (tgl 8 — tgl 7).
   Map<String, String> get _currentPeriod {
     final now = ServerTimeService.getEstimatedServerTime() ?? DateTime.now();
@@ -386,6 +400,14 @@ class _DashboardScreenState extends State<DashboardScreen>
         gradient: AppColors.skyGradient,
         onTap: () => _onMenuTap('Riwayat Absen'),
       ),
+      if (_epodRole != null)
+        MenuItemModel(
+          title: 'e-POD',
+          subtitle: 'Bukti pengiriman',
+          icon: Icons.assignment_turned_in_rounded,
+          gradient: AppColors.indigoGradient,
+          onTap: () => _onMenuTap('e-POD'),
+        ),
       MenuItemModel(
         title: 'Cuti',
         subtitle: 'Ajukan permohonan',
@@ -583,6 +605,16 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
         );
+        break;
+      case 'e-POD':
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => EpodHomeScreen(
+              employeeId: _pegawai.id,
+              employeeName: _pegawai.nama,
+            ),
+          ),
+        ).then((_) => _fetchEpodRole());
         break;
       case 'Cuti & Izin':
         Navigator.of(context).push(
