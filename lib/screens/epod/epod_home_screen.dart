@@ -7,10 +7,12 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../models/epod_assignment_model.dart';
 import '../../widgets/common/app_notification.dart';
+import 'epod_detail_screen.dart';
 
 /// Layar e-POD mobile: daftar FO milik pegawai dan FO yang bisa diklaim.
 ///
-/// Fase 1 hanya mencakup claim + list. Form loading/delivery menyusul.
+/// Ketuk kartu FO untuk membuka detail titik dan mengisi bukti
+/// loading/pengantaran.
 class EpodHomeScreen extends StatefulWidget {
   final String employeeId;
   final String employeeName;
@@ -372,8 +374,28 @@ class _EpodHomeScreenState extends State<EpodHomeScreen> {
       padding: const EdgeInsets.all(AppSpacing.base),
       itemCount: _overview.mine.length,
       separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-      itemBuilder: (_, index) => _MineCard(assignment: _overview.mine[index]),
+      itemBuilder: (_, index) {
+        final assignment = _overview.mine[index];
+        return _MineCard(
+          assignment: assignment,
+          onTap: () => _openDetail(assignment),
+        );
+      },
     );
+  }
+
+  Future<void> _openDetail(EpodAssignment assignment) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => EpodDetailScreen(
+          employeeId: widget.employeeId,
+          employeeName: widget.employeeName,
+          assignmentId: assignment.id,
+          assignmentTitle: assignment.title,
+        ),
+      ),
+    );
+    if (mounted) await _load();
   }
 
   Widget _buildAvailableList() {
@@ -477,68 +499,95 @@ class _EpodHomeScreenState extends State<EpodHomeScreen> {
 // ═════════════════════════════════════════════════════════
 class _MineCard extends StatelessWidget {
   final EpodAssignment assignment;
+  final VoidCallback onTap;
 
-  const _MineCard({required this.assignment});
+  const _MineCard({required this.assignment, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final tone = _statusTone(assignment.status);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.base),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  assignment.title,
-                  style: AppTextStyles.h4,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.all(AppSpacing.base),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              _Pill(label: assignment.statusLabel, color: tone),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
-          _InfoRow(
-            icon: Icons.local_shipping_rounded,
-            label: 'Kendaraan',
-            value: assignment.licensePlate ?? '-',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      assignment.title,
+                      style: AppTextStyles.h4,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  _Pill(label: assignment.statusLabel, color: tone),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _InfoRow(
+                icon: Icons.local_shipping_rounded,
+                label: 'Kendaraan',
+                value: assignment.licensePlate ?? '-',
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _InfoRow(
+                icon: Icons.badge_rounded,
+                label: 'Peran saya',
+                value: assignment.roleLabel,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _InfoRow(
+                icon: Icons.inventory_2_rounded,
+                label: 'Loading',
+                value:
+                    assignment.loadingCompleted ? 'Selesai' : 'Belum selesai',
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _InfoRow(
+                icon: Icons.place_rounded,
+                label: 'Pengantaran',
+                value: assignment.deliveryProgress,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  const Icon(Icons.touch_app_rounded,
+                      size: 15, color: AppColors.accent),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Ketuk untuk isi bukti',
+                    style: AppTextStyles.labelSm.copyWith(
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.chevron_right_rounded,
+                      size: 18, color: AppColors.accent),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          _InfoRow(
-            icon: Icons.badge_rounded,
-            label: 'Peran saya',
-            value: assignment.roleLabel,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _InfoRow(
-            icon: Icons.inventory_2_rounded,
-            label: 'Loading',
-            value: assignment.loadingCompleted ? 'Selesai' : 'Belum selesai',
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _InfoRow(
-            icon: Icons.place_rounded,
-            label: 'Pengantaran',
-            value: assignment.deliveryProgress,
-          ),
-        ],
+        ),
       ),
     );
   }
