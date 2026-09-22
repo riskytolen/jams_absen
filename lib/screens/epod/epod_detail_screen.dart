@@ -7,6 +7,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../models/epod_detail_model.dart';
 import '../../widgets/common/app_notification.dart';
+import 'epod_evidence_viewer.dart';
 import 'epod_submission_form_screen.dart';
 
 /// Layar detail satu FO: daftar titik loading & pengantaran.
@@ -547,20 +548,45 @@ class _SubmissionSummary extends StatelessWidget {
                 itemCount: evidence.length,
                 separatorBuilder: (_, _) =>
                     const SizedBox(width: AppSpacing.sm),
-                itemBuilder: (_, index) => ClipRRect(
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                  child: Image.network(
-                    evidence[index].url,
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      width: 64,
-                      height: 64,
-                      color: AppColors.surfaceDim,
-                      child: const Icon(Icons.broken_image_rounded,
-                          size: 20, color: AppColors.textMuted),
-                    ),
+                itemBuilder: (_, index) => GestureDetector(
+                  onTap: () => showEpodEvidenceViewer(
+                    context,
+                    urls: evidence.map((item) => item.url).toList(),
+                    initialIndex: index,
+                  ),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusMd),
+                        child: Image.network(
+                          evidence[index].url,
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            width: 64,
+                            height: 64,
+                            color: AppColors.surfaceDim,
+                            child: const Icon(Icons.broken_image_rounded,
+                                size: 20, color: AppColors.textMuted),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 4,
+                        bottom: 4,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Icon(Icons.zoom_in_rounded,
+                              size: 12, color: Colors.white),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

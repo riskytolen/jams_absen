@@ -524,12 +524,17 @@ class _MineCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
         onTap: onTap,
-        child: Ink(
-          padding: const EdgeInsets.all(AppSpacing.base),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-            border: Border.all(color: AppColors.border),
+          child: Ink(
+            padding: const EdgeInsets.all(AppSpacing.base),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+              border: Border.all(
+                color: assignment.isCompleted
+                    ? AppColors.success.withValues(alpha: 0.5)
+                    : AppColors.border,
+                width: assignment.isCompleted ? 1.2 : 1,
+              ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.03),
@@ -583,19 +588,33 @@ class _MineCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
-                  const Icon(Icons.touch_app_rounded,
-                      size: 15, color: AppColors.accent),
+                  Icon(
+                    assignment.isCompleted
+                        ? Icons.visibility_rounded
+                        : Icons.touch_app_rounded,
+                    size: 15,
+                    color: assignment.isCompleted
+                        ? AppColors.success
+                        : AppColors.accent,
+                  ),
                   const SizedBox(width: 6),
                   Text(
-                    'Ketuk untuk isi bukti',
+                    assignment.isCompleted
+                        ? 'Lihat bukti yang sudah dikirim'
+                        : 'Ketuk untuk isi bukti',
                     style: AppTextStyles.labelSm.copyWith(
-                      color: AppColors.accent,
+                      color: assignment.isCompleted
+                          ? AppColors.success
+                          : AppColors.accent,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const Spacer(),
-                  const Icon(Icons.chevron_right_rounded,
-                      size: 18, color: AppColors.accent),
+                  Icon(Icons.chevron_right_rounded,
+                      size: 18,
+                      color: assignment.isCompleted
+                          ? AppColors.success
+                          : AppColors.accent),
                 ],
               ),
             ],

@@ -12,6 +12,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../models/epod_detail_model.dart';
 import '../../widgets/common/app_notification.dart';
+import 'epod_evidence_viewer.dart';
 
 /// Form input bukti e-POD untuk satu titik (loading atau pengantaran).
 ///
@@ -560,24 +561,11 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
                   ],
                 )
               : photos.length == 1
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(
-                          AppSpacing.radiusMd),
-                      child: Image.network(
-                        photos.first.url,
-                        width: double.infinity,
-                        height: 220,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
-                          width: double.infinity,
-                          height: 120,
-                          color: AppColors.surfaceDim,
-                          alignment: Alignment.center,
-                          child: const Icon(
-                              Icons.broken_image_rounded,
-                              color: AppColors.textMuted),
-                        ),
-                      ),
+                  ? _TappableEvidencePhoto(
+                      url: photos.first.url,
+                      width: double.infinity,
+                      height: 220,
+                      onTap: () => _openEvidenceViewer(photos, 0),
                     )
                   : SizedBox(
                       height: 96,
@@ -586,23 +574,12 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
                         itemCount: photos.length,
                         separatorBuilder: (_, _) => const SizedBox(
                             width: AppSpacing.sm),
-                        itemBuilder: (_, index) => ClipRRect(
-                          borderRadius: BorderRadius.circular(
-                              AppSpacing.radiusMd),
-                          child: Image.network(
-                            photos[index].url,
-                            width: 96,
-                            height: 96,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => Container(
-                              width: 96,
-                              height: 96,
-                              color: AppColors.surfaceDim,
-                              child: const Icon(
-                                  Icons.broken_image_rounded,
-                                  color: AppColors.textMuted),
-                            ),
-                          ),
+                        itemBuilder: (_, index) => _TappableEvidencePhoto(
+                          url: photos[index].url,
+                          width: 96,
+                          height: 96,
+                          onTap: () =>
+                              _openEvidenceViewer(photos, index),
                         ),
                       ),
                     ),
@@ -743,6 +720,17 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
     return '$text km';
   }
 
+  void _openEvidenceViewer(
+      List<EpodEvidenceView> photos, int initialIndex) {
+    final urls = photos.map((item) => item.url).toList();
+    if (urls.isEmpty) return;
+    showEpodEvidenceViewer(
+      context,
+      urls: urls,
+      initialIndex: initialIndex.clamp(0, urls.length - 1),
+    );
+  }
+
   String _formatReviewDateTime(DateTime value) {
     final local = value.toLocal();
     String two(int n) => n.toString().padLeft(2, '0');
@@ -841,6 +829,7 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
 
   Widget _buildLocationSection() {
     final distance = _distanceMeters;
+    final statusColor = _outOfRadius ? AppColors.error : AppColors.success;
     return _Section(
       title: 'Lokasi GPS',
       subtitle: 'Diambil otomatis saat bukti dikirim',
@@ -848,60 +837,182 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (_locating)
-            const Row(
-              children: [
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.accent,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.accentBg,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              ),
+              child: const Row(
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.accent,
+                    ),
                   ),
-                ),
-                SizedBox(width: AppSpacing.sm),
-                Text('Mengambil lokasi...'),
-              ],
+                  SizedBox(width: AppSpacing.sm),
+                  Text('Mengambil lokasi...',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.accent)),
+                ],
+              ),
             )
           else if (_locationError != null)
-            Text(
-              _locationError!,
-              style: AppTextStyles.bodySm.copyWith(color: AppColors.error),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.errorBg,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: Border.all(
+                    color: AppColors.error.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.location_off_rounded,
+                      size: 16, color: AppColors.error),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _locationError!,
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.error),
+                    ),
+                  ),
+                ],
+              ),
             )
           else ...[
-            _InfoLine(
-              icon: Icons.my_location_rounded,
-              label: 'Koordinat',
-              value: '${_latitude!.toStringAsFixed(6)}, '
-                  '${_longitude!.toStringAsFixed(6)}',
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: _outOfRadius
+                    ? AppColors.errorBg
+                    : AppColors.successBg,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: Border.all(
+                  color: statusColor.withValues(alpha: 0.35),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _outOfRadius
+                        ? Icons.warning_amber_rounded
+                        : Icons.check_circle_rounded,
+                    size: 16,
+                    color: statusColor,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _outOfRadius ? 'Di luar radius titik' : 'Lokasi valid',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 6),
-            _InfoLine(
-              icon: Icons.gps_fixed_rounded,
-              label: 'Akurasi',
-              value: _accuracy == null
-                  ? '-'
-                  : '±${_accuracy!.toStringAsFixed(0)} m',
-            ),
-            const SizedBox(height: 6),
-            _InfoLine(
-              icon: Icons.place_rounded,
-              label: 'Jarak ke titik',
-              value: distance == null
-                  ? 'Titik tanpa koordinat'
-                  : '${distance.toStringAsFixed(0)} m',
-              tone: _outOfRadius ? AppColors.error : AppColors.success,
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Koordinat', style: AppTextStyles.caption),
+                  const SizedBox(height: 1),
+                  Text(
+                    '${_latitude!.toStringAsFixed(6)}, '
+                    '${_longitude!.toStringAsFixed(6)}',
+                    style: AppTextStyles.label.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Akurasi',
+                                style: AppTextStyles.caption),
+                            const SizedBox(height: 1),
+                            Text(
+                              _accuracy == null
+                                  ? '-'
+                                  : '±${_accuracy!.toStringAsFixed(0)} m',
+                              style: AppTextStyles.label.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Jarak ke titik',
+                                style: AppTextStyles.caption),
+                            const SizedBox(height: 1),
+                            Text(
+                              distance == null
+                                  ? 'Tanpa koordinat titik'
+                                  : _formatHumanDistance(distance),
+                              style: AppTextStyles.label.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: _outOfRadius
+                                    ? AppColors.error
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
-          const SizedBox(height: AppSpacing.md),
-          OutlinedButton.icon(
-            onPressed: (_submitting || _locating) ? null : _fetchLocation,
-            icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: const Text('Ambil Ulang Lokasi'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.accent,
-              side: const BorderSide(color: AppColors.accent),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: OutlinedButton.icon(
+              onPressed:
+                  (_submitting || _locating) ? null : _fetchLocation,
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text(
+                'Ambil Ulang Lokasi',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.accent,
+                side: const BorderSide(color: AppColors.accent),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                ),
               ),
             ),
           ),
@@ -913,14 +1024,14 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
   Widget _buildOutOfRadiusField() {
     return _Section(
       title: 'Alasan Di Luar Radius',
-      subtitle: 'Lokasi lebih dari ${EpodService.geofenceMeters.toStringAsFixed(0)} m '
-          'dari titik — alasan wajib diisi',
+      subtitle: 'Wajib karena lokasi di luar '
+          '${EpodService.geofenceMeters.toStringAsFixed(0)} m dari titik',
       child: TextField(
         controller: _reasonCtrl,
-        maxLines: 3,
+        maxLines: 2,
         enabled: !_submitting,
         decoration: const InputDecoration(
-          hintText: 'Contoh: akses jalan ke titik ditutup, GPS meleset',
+          hintText: 'Contoh: akses jalan ditutup, GPS meleset',
         ),
       ),
     );
@@ -1259,38 +1370,57 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _InfoLine extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color? tone;
+/// Foto evidence yang bisa diketuk untuk dibuka fullscreen.
+class _TappableEvidencePhoto extends StatelessWidget {
+  final String url;
+  final double width;
+  final double height;
+  final VoidCallback onTap;
 
-  const _InfoLine({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.tone,
+  const _TappableEvidencePhoto({
+    required this.url,
+    required this.width,
+    required this.height,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 15, color: tone ?? AppColors.textMuted),
-        const SizedBox(width: 6),
-        Text(label, style: AppTextStyles.labelSm),
-        const Spacer(),
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: AppTextStyles.label.copyWith(
-              fontWeight: FontWeight.w700,
-              color: tone ?? AppColors.textPrimary,
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            child: Image.network(
+              url,
+              width: width,
+              height: height,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => Container(
+                width: width,
+                height: height,
+                color: AppColors.surfaceDim,
+                child: const Icon(Icons.broken_image_rounded,
+                    color: AppColors.textMuted),
+              ),
             ),
           ),
-        ),
-      ],
+          Positioned(
+            right: 6,
+            bottom: 6,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.zoom_in_rounded,
+                  size: 14, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -29,7 +29,10 @@ class EpodOverview {
   bool get isDeputyCoordinator => role == 'DEPUTY_COORDINATOR';
   bool get isEligible =>
       isDriver || isHelper || isCoordinator || isDeputyCoordinator;
-  bool get hasActiveAssignment => mine.isNotEmpty;
+
+  /// FO selesai tetap tampil di `mine`, jadi "aktif" harus status-aware:
+  /// hanya FO yang belum COMPLETED/CANCELLED yang menghalangi klaim baru.
+  bool get hasActiveAssignment => mine.any((a) => a.isActive);
 }
 
 /// Exception e-POD dengan pesan siap tampil ke pengguna.

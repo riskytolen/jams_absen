@@ -95,6 +95,11 @@ class EpodAssignment {
 
   bool get loadingCompleted => loadingStatus == 'LOADING_COMPLETED';
 
+  /// FO masih dikerjakan (belum selesai/dibatalkan).
+  bool get isActive => status != 'COMPLETED' && status != 'CANCELLED';
+
+  bool get isCompleted => status == 'COMPLETED';
+
   /// Judul utama kartu: nomor FO bila ada, jika tidak potongan ID.
   String get title => taskNumber ?? (id.length > 8 ? id.substring(0, 8) : id);
 
