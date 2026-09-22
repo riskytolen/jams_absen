@@ -22,12 +22,18 @@ class EpodSubmissionFormScreen extends StatefulWidget {
   final String assignmentTitle;
   final EpodStop stop;
 
+  /// Foto bukti tersimpan (signed URL) untuk mode lihat bukti.
+  ///
+  /// Disediakan layar detail via Edge Function `epod-evidence-urls`.
+  final List<EpodEvidenceView> existingEvidence;
+
   const EpodSubmissionFormScreen({
     super.key,
     required this.employeeId,
     required this.assignmentId,
     required this.assignmentTitle,
     required this.stop,
+    this.existingEvidence = const [],
   });
 
   @override
@@ -52,6 +58,12 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
   bool _submitting = false;
   String _progress = '';
 
+  /// Mode lihat bukti untuk titik yang sudah selesai.
+  ///
+  /// GPS tidak diambil dalam mode ini; lokasi baru diambil saat pengguna
+  /// memilih kirim ulang bukti.
+  bool _reviewing = false;
+
   bool get _isLoading => widget.stop.isLoading;
   bool get _isCorrection => widget.stop.isDone;
 
@@ -60,6 +72,13 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
     super.initState();
     if (!_isLoading) _items.add(_ItemRow());
     _prefillFromExisting();
+    _reviewing = _isCorrection;
+    if (!_reviewing) _fetchLocation();
+  }
+
+  /// Masuk ke mode isi/kirim ulang: tampilkan form lalu ambil lokasi.
+  void _enterEdit() {
+    setState(() => _reviewing = false);
     _fetchLocation();
   }
 
@@ -396,22 +415,26 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(AppSpacing.base),
                   children: [
-                    _buildPhotoSection(),
-                    const SizedBox(height: AppSpacing.base),
-                    _buildLocationSection(),
-                    if (_outOfRadius) ...[
+                    if (_reviewing && _isCorrection) ...[
+                      _buildReviewSection(),
+                    ] else ...[
+                      _buildPhotoSection(),
                       const SizedBox(height: AppSpacing.base),
-                      _buildOutOfRadiusField(),
-                    ],
-                    if (!_isLoading) ...[
-                      const SizedBox(height: AppSpacing.base),
-                      _buildItemsSection(),
-                      const SizedBox(height: AppSpacing.base),
-                      _buildResultSection(),
-                      const SizedBox(height: AppSpacing.base),
-                      _buildRecipientField(),
-                      const SizedBox(height: AppSpacing.base),
-                      _buildNoteField(),
+                      _buildLocationSection(),
+                      if (_outOfRadius) ...[
+                        const SizedBox(height: AppSpacing.base),
+                        _buildOutOfRadiusField(),
+                      ],
+                      if (!_isLoading) ...[
+                        const SizedBox(height: AppSpacing.base),
+                        _buildItemsSection(),
+                        const SizedBox(height: AppSpacing.base),
+                        _buildResultSection(),
+                        const SizedBox(height: AppSpacing.base),
+                        _buildRecipientField(),
+                        const SizedBox(height: AppSpacing.base),
+                        _buildNoteField(),
+                      ],
                     ],
                     const SizedBox(height: AppSpacing.xl),
                   ],
@@ -423,6 +446,132 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
         ),
       ),
     );
+  }
+
+  /// Ringkasan bukti tersimpan untuk titik yang sudah selesai.
+  ///
+  /// Tidak mengambil GPS; hanya menampilkan data versi aktif.
+  Widget _buildReviewSection() {
+    final current = widget.stop.current;
+    final photos = widget.existingEvidence;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Section(
+          title: 'Bukti Tersimpan',
+          subtitle: current == null
+              ? null
+              : 'Bukti v${current.version} • ${current.resultLabel}',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (photos.isNotEmpty) ...[
+                SizedBox(
+                  height: 84,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: photos.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(width: AppSpacing.sm),
+                    itemBuilder: (_, index) => ClipRRect(
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.radiusMd),
+                      child: Image.network(
+                        photos[index].url,
+                        width: 84,
+                        height: 84,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          width: 84,
+                          height: 84,
+                          color: AppColors.surfaceDim,
+                          child: const Icon(Icons.broken_image_rounded,
+                              color: AppColors.textMuted),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              if (current?.result != null)
+                _InfoLine(
+                  icon: Icons.local_shipping_rounded,
+                  label: 'Hasil',
+                  value: current!.resultLabel,
+                  tone: AppColors.success,
+                ),
+              if (current?.recipientName != null) ...[
+                const SizedBox(height: 6),
+                _InfoLine(
+                  icon: Icons.person_rounded,
+                  label: 'Penerima',
+                  value: current!.recipientName!,
+                ),
+              ],
+              if ((current?.note ?? '').isNotEmpty) ...[
+                const SizedBox(height: 6),
+                _InfoLine(
+                  icon: Icons.note_rounded,
+                  label: 'Catatan',
+                  value: current!.note!,
+                ),
+              ],
+              if (current != null && current.items.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                _InfoLine(
+                  icon: Icons.inventory_2_rounded,
+                  label: 'Barang',
+                  value: current.items
+                      .map((item) => '${item.name} (${item.summary})')
+                      .join(', '),
+                ),
+              ],
+              if (current?.distanceMeters != null) ...[
+                const SizedBox(height: 6),
+                _InfoLine(
+                  icon: Icons.place_rounded,
+                  label: 'Jarak saat kirim',
+                  value:
+                      '${current!.distanceMeters!.toStringAsFixed(0)} m',
+                ),
+              ],
+              if (current?.capturedAtServer != null) ...[
+                const SizedBox(height: 6),
+                _InfoLine(
+                  icon: Icons.schedule_rounded,
+                  label: 'Waktu kirim',
+                  value: _formatReviewDateTime(current!.capturedAtServer!),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.base),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.warningBg,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            border: Border.all(
+                color: AppColors.warning.withValues(alpha: 0.35)),
+          ),
+          child: const Text(
+            'Kirim ulang akan menggantikan bukti ini dengan versi baru. '
+            'Foto wajib dilampirkan ulang dan lokasi akan diambil kembali.',
+            style: TextStyle(fontSize: 12, color: AppColors.warning),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatReviewDateTime(DateTime value) {
+    final local = value.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(local.day)}/${two(local.month)}/${local.year} '
+        '${two(local.hour)}:${two(local.minute)}';
   }
 
   Widget _buildHeader() {
@@ -444,12 +593,14 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
                 iconSize: 22,
               ),
               const SizedBox(width: 4),
-              Expanded(
+                  Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _isLoading ? 'Bukti Loading' : 'Bukti Pengantaran',
+                      _reviewing && _isCorrection
+                          ? 'Detail Bukti'
+                          : (_isLoading ? 'Bukti Loading' : 'Bukti Pengantaran'),
                       style: AppTextStyles.onDarkTitle.copyWith(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -606,60 +757,101 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
       child: Column(
         children: [
           for (int i = 0; i < _items.length; i++) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 4,
-                  child: TextField(
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Barang ${i + 1}',
+                        style: AppTextStyles.label.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (_items.length > 1)
+                        IconButton(
+                          onPressed:
+                              _submitting ? null : () => _removeItem(i),
+                          icon: const Icon(Icons.delete_outline_rounded,
+                              size: 18),
+                          color: AppColors.error,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                              minWidth: 32, minHeight: 32),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  TextField(
                     controller: _items[i].nameCtrl,
                     enabled: !_submitting,
                     textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(hintText: 'Nama barang'),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    controller: _items[i].qtyCtrl,
-                    enabled: !_submitting,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Nama barang',
+                      hintText: 'Contoh: Kopi Tubruk',
                     ),
-                    decoration: const InputDecoration(hintText: 'Jumlah'),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    controller: _items[i].unitCtrl,
-                    enabled: !_submitting,
-                    decoration: const InputDecoration(hintText: 'Satuan'),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _items[i].qtyCtrl,
+                          enabled: !_submitting,
+                          keyboardType:
+                              const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Jumlah',
+                            hintText: 'Contoh: 2',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: TextField(
+                          controller: _items[i].unitCtrl,
+                          enabled: !_submitting,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: const InputDecoration(
+                            labelText: 'Satuan',
+                            hintText: 'Contoh: dus',
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                IconButton(
-                  onPressed: _submitting || _items.length <= 1
-                      ? null
-                      : () => _removeItem(i),
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                  color: AppColors.error,
-                ),
-              ],
+                ],
+              ),
             ),
-            if (i != _items.length - 1) const SizedBox(height: AppSpacing.sm),
+            if (i != _items.length - 1)
+              const SizedBox(height: AppSpacing.sm),
           ],
           const SizedBox(height: AppSpacing.md),
-          OutlinedButton.icon(
-            onPressed: _submitting || _items.length >= 20 ? null : _addItem,
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Tambah Barang'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.accent,
-              side: const BorderSide(color: AppColors.accent),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed:
+                  _submitting || _items.length >= 20 ? null : _addItem,
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: Text('Tambah Barang (${_items.length}/20)'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.accent,
+                side: const BorderSide(color: AppColors.accent),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                ),
               ),
             ),
           ),
@@ -722,7 +914,42 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
     );
   }
 
+  /// Bar bawah: dalam mode lihat bukti hanya menawarkan kirim ulang
+  /// (yang sekaligus mengaktifkan GPS); selain itu tombol kirim biasa.
   Widget _buildSubmitBar() {
+    if (_reviewing && _isCorrection) {
+      return Container(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.base,
+          AppSpacing.md,
+          AppSpacing.base,
+          AppSpacing.base + MediaQuery.of(context).padding.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: const Border(top: BorderSide(color: AppColors.border)),
+        ),
+        child: SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: OutlinedButton.icon(
+            onPressed: _enterEdit,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text(
+              'Kirim Ulang Bukti',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.accent,
+              side: const BorderSide(color: AppColors.accent, width: 1.5),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Container(
       padding: EdgeInsets.fromLTRB(
         AppSpacing.base,

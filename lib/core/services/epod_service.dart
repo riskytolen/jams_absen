@@ -177,6 +177,48 @@ abstract final class EpodService {
     }
   }
 
+  /// Ambil signed URL foto bukti aktif per submission.
+  ///
+  /// Bersifat opsional: gagal memuat URL tidak menggagalkan layar detail,
+  /// foto lama hanya tidak ditampilkan. Kunci map adalah submission id.
+  static Future<Map<String, List<EpodEvidenceView>>> getEvidenceUrls({
+    required String assignmentId,
+    required String employeeId,
+  }) async {
+    try {
+      await SupabaseService.ensureAuthenticated();
+      final response = await SupabaseService.client.functions.invoke(
+        'epod-evidence-urls',
+        body: {
+          'assignment_id': assignmentId,
+          'employee_id': employeeId,
+        },
+      );
+      if (response.status != 200) return const {};
+      final data = response.data;
+      if (data is! Map) return const {};
+      final evidence = data['evidence'];
+      if (evidence is! Map) return const {};
+      final result = <String, List<EpodEvidenceView>>{};
+      evidence.forEach((key, value) {
+        if (value is List) {
+          final items = value
+              .whereType<Map>()
+              .map((item) =>
+                  EpodEvidenceView.fromMap(item.cast<String, dynamic>()))
+              .where((item) => item.url.isNotEmpty)
+              .toList()
+            ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+          if (items.isNotEmpty) result[key.toString()] = items;
+        }
+      });
+      return result;
+    } catch (e) {
+      debugPrint('[EpodService] getEvidenceUrls error: $e');
+      return const {};
+    }
+  }
+
   /// Kirim bukti loading/pengantaran untuk satu titik.
   ///
   /// [evidence] harus sudah terunggah lebih dulu via [uploadEvidence].

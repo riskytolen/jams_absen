@@ -35,6 +35,7 @@ class _EpodDetailScreenState extends State<EpodDetailScreen> {
   bool _loading = true;
   String? _error;
   EpodDetail? _detail;
+  Map<String, List<EpodEvidenceView>> _evidenceUrls = const {};
 
   @override
   void initState() {
@@ -52,9 +53,15 @@ class _EpodDetailScreenState extends State<EpodDetailScreen> {
         assignmentId: widget.assignmentId,
         employeeId: widget.employeeId,
       );
+      // URL foto bersifat pelengkap: kegagalan tidak menggagalkan layar.
+      final urls = await EpodService.getEvidenceUrls(
+        assignmentId: widget.assignmentId,
+        employeeId: widget.employeeId,
+      );
       if (!mounted) return;
       setState(() {
         _detail = detail;
+        _evidenceUrls = urls;
         _loading = false;
       });
     } on EpodException catch (e) {
@@ -87,6 +94,7 @@ class _EpodDetailScreenState extends State<EpodDetailScreen> {
           assignmentId: detail.id,
           assignmentTitle: detail.title,
           stop: stop,
+          existingEvidence: _evidenceUrls[stop.current?.id] ?? const [],
         ),
       ),
     );
@@ -112,6 +120,9 @@ class _EpodDetailScreenState extends State<EpodDetailScreen> {
 
   Widget _buildHeader() {
     final detail = _detail;
+    final done = detail?.deliveryDoneCount ?? 0;
+    final total = detail?.deliveryTotalCount ?? 0;
+    final progress = total > 0 ? (done / total).clamp(0.0, 1.0) : 0.0;
     return Container(
       decoration: const BoxDecoration(
         gradient: AppColors.headerGradient,
@@ -140,15 +151,15 @@ class _EpodDetailScreenState extends State<EpodDetailScreen> {
                         Text(
                           detail?.title ?? widget.assignmentTitle,
                           style: AppTextStyles.onDarkTitle.copyWith(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          widget.employeeName,
+                          '${widget.employeeName} • ${detail?.roleLabel ?? '-'}',
                           style: AppTextStyles.onDarkMuted.copyWith(fontSize: 12),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -165,31 +176,61 @@ class _EpodDetailScreenState extends State<EpodDetailScreen> {
                 ],
               ),
               if (detail != null) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                  padding: const EdgeInsets.only(left: 12, right: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _HeaderChip(
-                        icon: Icons.local_shipping_rounded,
-                        label: detail.licensePlate ?? '-',
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _HeaderChip(
+                            icon: Icons.local_shipping_rounded,
+                            label: detail.licensePlate ?? '-',
+                          ),
+                          _HeaderChip(
+                            icon: detail.loadingCompleted
+                                ? Icons.check_circle_rounded
+                                : Icons.hourglass_bottom_rounded,
+                            label: detail.loadingCompleted
+                                ? 'Loading selesai'
+                                : 'Loading belum',
+                            tone: detail.loadingCompleted
+                                ? AppColors.successLight
+                                : AppColors.warningLight,
+                          ),
+                        ],
                       ),
-                      _HeaderChip(
-                        icon: Icons.badge_rounded,
-                        label: detail.roleLabel,
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          const Icon(Icons.place_rounded,
+                              size: 13, color: Colors.white70),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Pengantaran $done/$total titik',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
-                      _HeaderChip(
-                        icon: Icons.inventory_2_rounded,
-                        label: detail.loadingCompleted
-                            ? 'Loading selesai'
-                            : 'Loading belum',
-                      ),
-                      _HeaderChip(
-                        icon: Icons.place_rounded,
-                        label:
-                            '${detail.deliveryDoneCount}/${detail.deliveryTotalCount} titik',
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: progress,
+                          minHeight: 6,
+                          backgroundColor:
+                              Colors.white.withValues(alpha: 0.22),
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            AppColors.successLight,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -266,6 +307,7 @@ class _EpodDetailScreenState extends State<EpodDetailScreen> {
           return _StopCard(
             stop: stop,
             blocked: blocked,
+            evidence: _evidenceUrls[stop.current?.id] ?? const [],
             onTap: () => _openForm(stop),
           );
         },
@@ -280,11 +322,13 @@ class _EpodDetailScreenState extends State<EpodDetailScreen> {
 class _StopCard extends StatelessWidget {
   final EpodStop stop;
   final bool blocked;
+  final List<EpodEvidenceView> evidence;
   final VoidCallback onTap;
 
   const _StopCard({
     required this.stop,
     required this.blocked,
+    required this.evidence,
     required this.onTap,
   });
 
@@ -294,18 +338,24 @@ class _StopCard extends StatelessWidget {
     final tone = done
         ? AppColors.success
         : (blocked ? AppColors.textMuted : AppColors.accent);
+    final borderColor = done
+        ? AppColors.success
+        : (blocked ? AppColors.border : AppColors.accent);
+    final cardTint = done
+        ? AppColors.successBg
+        : (blocked ? AppColors.surfaceAlt : AppColors.accentBg);
 
     return Material(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        onTap: onTap,
+        onTap: blocked ? null : onTap,
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.base),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: borderColor, width: 1.2),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -313,19 +363,20 @@ class _StopCard extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    width: 34,
-                    height: 34,
+                    width: 38,
+                    height: 38,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: tone.withValues(alpha: 0.12),
+                      color: done ? tone : tone.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                     ),
                     child: done
-                        ? Icon(Icons.check_rounded, size: 18, color: tone)
+                        ? const Icon(Icons.check_rounded,
+                            size: 20, color: Colors.white)
                         : Text(
                             '${stop.sequence}',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 14,
                               fontWeight: FontWeight.w800,
                               color: tone,
                             ),
@@ -375,33 +426,59 @@ class _StopCard extends StatelessWidget {
               ],
               if (done && stop.current != null) ...[
                 const SizedBox(height: AppSpacing.sm),
-                _SubmissionSummary(submission: stop.current!),
+                _SubmissionSummary(
+                  submission: stop.current!,
+                  evidence: evidence,
+                  tint: cardTint,
+                ),
               ],
               const SizedBox(height: AppSpacing.md),
               SizedBox(
                 width: double.infinity,
-                height: 40,
-                child: OutlinedButton(
-                  onPressed: onTap,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: blocked ? AppColors.textMuted : tone,
-                    side: BorderSide(
-                      color: blocked ? AppColors.border : tone,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                    ),
-                  ),
-                  child: Text(
-                    done
-                        ? 'Perbaiki Bukti'
-                        : (blocked ? 'Selesaikan Loading Dulu' : 'Isi Bukti'),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
+                height: 42,
+                child: blocked
+                    ? OutlinedButton(
+                        onPressed: null,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.textMuted,
+                          side: const BorderSide(color: AppColors.border),
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppSpacing.radiusMd),
+                          ),
+                        ),
+                        child: const Text(
+                          'Selesaikan Loading Dulu',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      )
+                    : OutlinedButton.icon(
+                        onPressed: onTap,
+                        icon: Icon(
+                          done
+                              ? Icons.visibility_rounded
+                              : Icons.edit_note_rounded,
+                          size: 18,
+                        ),
+                        label: Text(
+                          done ? 'Lihat Bukti' : 'Isi Bukti',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: tone,
+                          side: BorderSide(color: tone),
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppSpacing.radiusMd),
+                          ),
+                        ),
+                      ),
               ),
             ],
           ),
@@ -413,8 +490,14 @@ class _StopCard extends StatelessWidget {
 
 class _SubmissionSummary extends StatelessWidget {
   final EpodSubmission submission;
+  final List<EpodEvidenceView> evidence;
+  final Color tint;
 
-  const _SubmissionSummary({required this.submission});
+  const _SubmissionSummary({
+    required this.submission,
+    required this.evidence,
+    required this.tint,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -423,32 +506,68 @@ class _SubmissionSummary extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: tint,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Expanded(
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.success,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                ),
                 child: Text(
                   'Bukti v${submission.version} • ${submission.resultLabel}',
-                  style: AppTextStyles.label.copyWith(
+                  style: const TextStyle(
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: Colors.white,
                   ),
                 ),
               ),
+              const Spacer(),
               Text(
                 '${submission.evidenceCount} foto',
                 style: AppTextStyles.labelSm,
               ),
             ],
           ),
+          if (evidence.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            SizedBox(
+              height: 64,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: evidence.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: AppSpacing.sm),
+                itemBuilder: (_, index) => ClipRRect(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  child: Image.network(
+                    evidence[index].url,
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      width: 64,
+                      height: 64,
+                      color: AppColors.surfaceDim,
+                      child: const Icon(Icons.broken_image_rounded,
+                          size: 20, color: AppColors.textMuted),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
           if (submission.recipientName != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(
               'Penerima: ${submission.recipientName}',
               style: AppTextStyles.bodySm,
@@ -463,10 +582,24 @@ class _SubmissionSummary extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ],
+          if (submission.capturedAtServer != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Dikirim: ${_formatDateTime(submission.capturedAtServer!)}',
+              style: AppTextStyles.labelSm,
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+String _formatDateTime(DateTime value) {
+  final local = value.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${two(local.day)}/${two(local.month)}/${local.year} '
+      '${two(local.hour)}:${two(local.minute)}';
 }
 
 class _StatusPill extends StatelessWidget {
@@ -503,11 +636,13 @@ class _StatusPill extends StatelessWidget {
 class _HeaderChip extends StatelessWidget {
   final IconData icon;
   final String label;
+  final Color? tone;
 
-  const _HeaderChip({required this.icon, required this.label});
+  const _HeaderChip({required this.icon, required this.label, this.tone});
 
   @override
   Widget build(BuildContext context) {
+    final accent = tone ?? Colors.white;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -518,7 +653,7 @@ class _HeaderChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: Colors.white),
+          Icon(icon, size: 13, color: accent),
           const SizedBox(width: 5),
           Text(
             label,

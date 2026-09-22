@@ -98,6 +98,30 @@ class EpodSubmission {
   }
 }
 
+/// Satu foto bukti tersimpan, diakses via signed URL berumur pendek.
+///
+/// URL dibuat server-side (Edge Function `epod-evidence-urls`) setelah
+/// memvalidasi petugas terpasang pada FO.
+class EpodEvidenceView {
+  final String path;
+  final String url;
+  final int sortOrder;
+
+  const EpodEvidenceView({
+    required this.path,
+    required this.url,
+    required this.sortOrder,
+  });
+
+  factory EpodEvidenceView.fromMap(Map<String, dynamic> map) {
+    return EpodEvidenceView(
+      path: (map['path'] ?? '').toString(),
+      url: (map['url'] ?? '').toString(),
+      sortOrder: _int(map['sort_order']),
+    );
+  }
+}
+
 /// Satu titik pada rute FO (loading atau pengantaran).
 class EpodStop {
   final String id;
