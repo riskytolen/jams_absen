@@ -13,8 +13,6 @@ class EpodAssignment {
   final int deliveryTotalCount;
   final DateTime? snapshotAt;
   final String? myRole;
-  final bool driverFilled;
-  final bool helperFilled;
 
   const EpodAssignment({
     required this.id,
@@ -27,8 +25,6 @@ class EpodAssignment {
     required this.deliveryTotalCount,
     required this.snapshotAt,
     required this.myRole,
-    required this.driverFilled,
-    required this.helperFilled,
   });
 
   factory EpodAssignment.fromMap(Map<String, dynamic> map) {
@@ -43,8 +39,6 @@ class EpodAssignment {
       deliveryTotalCount: _int(map['delivery_total_count']),
       snapshotAt: _date(map['snapshot_at']),
       myRole: _str(map['my_role']),
-      driverFilled: map['driver_filled'] == true,
-      helperFilled: map['helper_filled'] == true,
     );
   }
 

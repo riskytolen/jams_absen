@@ -638,16 +638,6 @@ class _AvailableCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              _SlotBadge(
-                label: 'Driver',
-                filled: assignment.driverFilled,
-              ),
-              const SizedBox(width: 6),
-              _SlotBadge(
-                label: 'Helper',
-                filled: assignment.helperFilled,
-              ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -763,34 +753,6 @@ class _Pill extends StatelessWidget {
         label,
         style: TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: color,
-        ),
-      ),
-    );
-  }
-}
-
-class _SlotBadge extends StatelessWidget {
-  final String label;
-  final bool filled;
-
-  const _SlotBadge({required this.label, required this.filled});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = filled ? AppColors.error : AppColors.success;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
-      ),
-      child: Text(
-        filled ? '$label terisi' : '$label kosong',
-        style: TextStyle(
-          fontSize: 10,
           fontWeight: FontWeight.w700,
           color: color,
         ),
