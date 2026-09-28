@@ -22,6 +22,12 @@ abstract final class SupabaseService {
   /// 2. Cek apakah sudah ada session aktif (dari persistent storage)
   /// 3. Jika belum → sign in dengan service account
   static Future<void> initialize() async {
+    if (!SupabaseConfig.hasPublishableKey) {
+      throw StateError(
+        'Kunci Supabase belum terpasang. Build dengan '
+        '--dart-define=SUPABASE_PUBLISHABLE_KEY=...',
+      );
+    }
     await Supabase.initialize(
       url: SupabaseConfig.supabaseUrl,
       publishableKey: SupabaseConfig.supabasePublishableKey,

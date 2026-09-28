@@ -1,13 +1,12 @@
 ﻿/// Konfigurasi koneksi Supabase.
 ///
-/// Key WAJIB di-pass via `--dart-define` saat build. Tidak ada fallback
-/// key di source karena legacy anon/service_role key sudah dinonaktifkan
-/// server-side — build tanpa key menghasilkan aplikasi yang tidak bisa login.
+/// Satu database dengan HR Web (`hr_web/.env.local`):
+/// project `snovvucsmewwbrnggvek`. Publishable key di bawah aman untuk
+/// client-side dan boleh dioverride via `--dart-define` saat build.
 ///
-/// Build command:
+/// Build command (override opsional):
 /// ```
 /// flutter build apk --release \
-///   --dart-define=SUPABASE_URL=https://snovvucsmewwbrnggvek.supabase.co \
 ///   --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_... \
 ///   --dart-define=SUPABASE_SERVICE_EMAIL=... \
 ///   --dart-define=SUPABASE_SERVICE_PASSWORD=...
@@ -21,9 +20,10 @@ abstract final class SupabaseConfig {
 
   /// Supabase publishable key — aman untuk client-side.
   /// Legacy anon JWT tidak dipakai lagi (dinonaktifkan server-side).
+  /// Default sama dengan `NEXT_PUBLIC_SUPABASE_ANON_KEY` pada `hr_web/.env.local`.
   static const supabasePublishableKey = String.fromEnvironment(
     'SUPABASE_PUBLISHABLE_KEY',
-    defaultValue: '',
+    defaultValue: 'sb_publishable_8bUgVQs3Wwj1H-fSVsQAQw_wDXDVgQk',
   );
 
   /// True jika key tersedia (wajib untuk build release yang valid).

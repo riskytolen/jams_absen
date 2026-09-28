@@ -162,6 +162,27 @@ abstract final class AuthService {
         );
       }
 
+      if (msg.contains('invalid api key') ||
+          msg.contains('apikey') ||
+          msg.contains('api key') ||
+          msg.contains('publishable')) {
+        throw const AuthException(
+          type: AuthErrorType.serverError,
+          message: 'Kunci Supabase tidak valid. '
+              'Pastikan aplikasi dibangun dengan publishable key yang benar, lalu coba lagi.',
+        );
+      }
+
+      if (msg.contains('invalid login credentials') ||
+          msg.contains('invalid_grant') ||
+          msg.contains('email not confirmed')) {
+        throw const AuthException(
+          type: AuthErrorType.serverError,
+          message: 'Akun layanan absen tidak bisa masuk ke server. '
+              'Pastikan email dan password aplikasi absen sudah benar, lalu coba lagi.',
+        );
+      }
+
       throw AuthException(
         type: AuthErrorType.unknown,
         message: 'Terjadi kesalahan yang tidak terduga. '
