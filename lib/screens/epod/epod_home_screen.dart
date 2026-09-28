@@ -411,6 +411,25 @@ class _EpodHomeScreenState extends State<EpodHomeScreen> {
     if (mounted) await _load();
   }
 
+  Future<void> _openPreview(EpodAssignment assignment) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _PreviewSheet(
+        employeeId: widget.employeeId,
+        assignment: assignment,
+        onClaim: () {
+          Navigator.of(context).pop();
+          _claim(assignment);
+        },
+      ),
+    );
+  }
+
   Widget _buildAvailableList() {
     if (_overview.hasActiveAssignment) {
       return _buildScrollableMessage(
@@ -440,6 +459,7 @@ class _EpodHomeScreenState extends State<EpodHomeScreen> {
           claiming: _claimingId == assignment.id,
           disabled: _claimingId != null,
           onClaim: () => _claim(assignment),
+          onInspect: () => _openPreview(assignment),
         );
       },
     );
@@ -633,64 +653,78 @@ class _AvailableCard extends StatelessWidget {
   final bool claiming;
   final bool disabled;
   final VoidCallback onClaim;
+  final VoidCallback onInspect;
 
   const _AvailableCard({
     required this.assignment,
     required this.claiming,
     required this.disabled,
     required this.onClaim,
+    required this.onInspect,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.base),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  assignment.title,
-                  style: AppTextStyles.h4,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+        onTap: onInspect,
+        child: Ink(
+          padding: const EdgeInsets.all(AppSpacing.base),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
-          _InfoRow(
-            icon: Icons.local_shipping_rounded,
-            label: 'Kendaraan',
-            value: assignment.licensePlate ?? '-',
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _InfoRow(
-            icon: Icons.person_rounded,
-            label: 'Driver vendor',
-            value: assignment.vendorDriverName ?? '-',
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _InfoRow(
-            icon: Icons.place_rounded,
-            label: 'Jumlah titik',
-            value: '${assignment.deliveryTotalCount} titik',
-          ),
-          const SizedBox(height: AppSpacing.base),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      assignment.title,
+                      style: AppTextStyles.h4,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.visibility_outlined, size: 18, color: AppColors.textMuted),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Ketuk kartu untuk melihat rute sebelum klaim.',
+                style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _InfoRow(
+                icon: Icons.local_shipping_rounded,
+                label: 'Kendaraan',
+                value: assignment.licensePlate ?? '-',
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _InfoRow(
+                icon: Icons.person_rounded,
+                label: 'Driver vendor',
+                value: assignment.vendorDriverName ?? '-',
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _InfoRow(
+                icon: Icons.place_rounded,
+                label: 'Jumlah titik',
+                value: '${assignment.deliveryTotalCount} titik',
+              ),
+              const SizedBox(height: AppSpacing.base),
           SizedBox(
             width: double.infinity,
             height: 44,
@@ -723,6 +757,224 @@ class _AvailableCard extends StatelessWidget {
                             ),
                           ),
                   ),
+                ),
+              ),
+            ),
+          ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════
+// PREVIEW RUTE SEBELUM CLAIM (READ-ONLY)
+// ═════════════════════════════════════════════════════════
+class _PreviewSheet extends StatefulWidget {
+  final String employeeId;
+  final EpodAssignment assignment;
+  final VoidCallback onClaim;
+
+  const _PreviewSheet({
+    required this.employeeId,
+    required this.assignment,
+    required this.onClaim,
+  });
+
+  @override
+  State<_PreviewSheet> createState() => _PreviewSheetState();
+}
+
+class _PreviewSheetState extends State<_PreviewSheet> {
+  bool _loading = true;
+  String? _error;
+  List<Map<String, dynamic>> _stops = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final detail = await EpodService.getPreview(
+        assignmentId: widget.assignment.id,
+        employeeId: widget.employeeId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _stops = detail.stops
+            .map((s) => {
+                  'sequence': s.sequence,
+                  'stopType': s.stopType,
+                  'pointName': s.pointName,
+                  'address': s.address,
+                })
+            .toList();
+        _loading = false;
+      });
+    } on EpodException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.75,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (_, controller) => Column(
+        children: [
+          const SizedBox(height: 8),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.border,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.base),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.assignment.title, style: AppTextStyles.h4),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${widget.assignment.licensePlate ?? '-'} • ${widget.assignment.vendorDriverName ?? '-'}',
+                        style: AppTextStyles.bodySm,
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.xl),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_error!, textAlign: TextAlign.center),
+                              const SizedBox(height: 12),
+                              OutlinedButton.icon(
+                                onPressed: _load,
+                                icon: const Icon(Icons.refresh_rounded, size: 18),
+                                label: const Text('Muat Ulang'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        controller: controller,
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.base),
+                        itemCount: _stops.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (_, index) {
+                          final stop = _stops[index];
+                          final isLoading = (stop['stopType'] as String) == 'LOADING';
+                          return Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.background,
+                              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 26,
+                                  height: 26,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: isLoading ? AppColors.textSecondary : AppColors.accent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '${stop['sequence']}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        isLoading ? 'LOADING' : 'PENGANTARAN',
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.textMuted,
+                                        ),
+                                      ),
+                                      Text(
+                                        (stop['pointName'] as String?) ?? 'Titik',
+                                        style: const TextStyle(fontWeight: FontWeight.w700),
+                                      ),
+                                      if ((stop['address'] as String?) != null)
+                                        Text(
+                                          stop['address'] as String,
+                                          style: AppTextStyles.bodySm,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.base),
+            child: SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton(
+                onPressed: widget.onClaim,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  ),
+                ),
+                child: const Text(
+                  'Klaim FO Ini Setelah Melihat Rute',
+                  style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
             ),

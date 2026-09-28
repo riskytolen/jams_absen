@@ -106,20 +106,29 @@ class EpodEvidenceView {
   final String path;
   final String url;
   final int sortOrder;
+  final String evidenceType;
 
   const EpodEvidenceView({
     required this.path,
     required this.url,
     required this.sortOrder,
+    this.evidenceType = 'PHOTO',
   });
 
   factory EpodEvidenceView.fromMap(Map<String, dynamic> map) {
+    final rawType = (map['evidence_type'] ?? map['evidenceType'] ?? 'PHOTO')
+        .toString()
+        .toUpperCase();
     return EpodEvidenceView(
       path: (map['path'] ?? '').toString(),
       url: (map['url'] ?? '').toString(),
       sortOrder: _int(map['sort_order']),
+      evidenceType:
+          rawType == 'RECIPIENT_SIGNATURE' ? 'RECIPIENT_SIGNATURE' : 'PHOTO',
     );
   }
+
+  bool get isSignature => evidenceType == 'RECIPIENT_SIGNATURE';
 }
 
 /// Satu titik pada rute FO (loading atau pengantaran).

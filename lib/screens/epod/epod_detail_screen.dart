@@ -503,6 +503,8 @@ class _SubmissionSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = submission.items;
+    final photos = evidence.where((e) => !e.isSignature).toList();
+    final signatures = evidence.where((e) => e.isSignature).toList();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -534,24 +536,24 @@ class _SubmissionSummary extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '${submission.evidenceCount} foto',
+                '${photos.length} foto',
                 style: AppTextStyles.labelSm,
               ),
             ],
           ),
-          if (evidence.isNotEmpty) ...[
+          if (photos.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             SizedBox(
               height: 64,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: evidence.length,
+                itemCount: photos.length,
                 separatorBuilder: (_, _) =>
                     const SizedBox(width: AppSpacing.sm),
                 itemBuilder: (_, index) => GestureDetector(
                   onTap: () => showEpodEvidenceViewer(
                     context,
-                    urls: evidence.map((item) => item.url).toList(),
+                    urls: photos.map((item) => item.url).toList(),
                     initialIndex: index,
                   ),
                   child: Stack(
@@ -560,7 +562,7 @@ class _SubmissionSummary extends StatelessWidget {
                         borderRadius:
                             BorderRadius.circular(AppSpacing.radiusMd),
                         child: Image.network(
-                          evidence[index].url,
+                          photos[index].url,
                           width: 64,
                           height: 64,
                           fit: BoxFit.cover,
@@ -589,6 +591,41 @@ class _SubmissionSummary extends StatelessWidget {
                     ],
                   ),
                 ),
+              ),
+            ),
+          ],
+          if (signatures.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Tanda tangan penerima',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      signatures.first.url,
+                      width: double.infinity,
+                      height: 90,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const Text(
+                        'Tanda tangan tidak dapat dimuat.',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

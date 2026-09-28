@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -48,6 +50,8 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
   final TextEditingController _noteCtrl = TextEditingController();
   final TextEditingController _reasonCtrl = TextEditingController();
   final List<_ItemRow> _items = [];
+  final GlobalKey _signatureBoundaryKey = GlobalKey();
+  final List<Offset?> _signaturePoints = [];
 
   String? _result;
   double? _latitude;
@@ -79,8 +83,32 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
 
   /// Masuk ke mode isi/kirim ulang: tampilkan form lalu ambil lokasi.
   void _enterEdit() {
-    setState(() => _reviewing = false);
+    setState(() {
+      _reviewing = false;
+      _signaturePoints.clear();
+    });
     _fetchLocation();
+  }
+
+  bool get _hasSignature => _signaturePoints.any((p) => p != null);
+
+  void _clearSignature() {
+    setState(() => _signaturePoints.clear());
+  }
+
+  Future<Uint8List?> _exportSignature() async {
+    if (!_hasSignature) return null;
+    try {
+      final boundary = _signatureBoundaryKey.currentContext
+          ?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return null;
+      final image = await boundary.toImage(pixelRatio: 3);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      return byteData?.buffer.asUint8List();
+    } catch (e) {
+      debugPrint('[EpodForm] export signature error: $e');
+      return null;
+    }
   }
 
   void _prefillFromExisting() {
@@ -274,6 +302,26 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
         evidence.add(upload);
       }
 
+      if (!_isLoading) {
+        if (!mounted) return;
+        setState(() => _progress = 'Mengunggah tanda tangan...');
+        final png = await _exportSignature();
+        if (png == null || png.isEmpty) {
+          if (!mounted) return;
+          setState(() => _submitting = false);
+          _notify(NotificationType.warning, 'Lengkapi Data',
+              'Tanda tangan penerima wajib diisi.');
+          return;
+        }
+        final signatureUpload = await EpodService.uploadSignature(
+          assignmentId: widget.assignmentId,
+          stopId: widget.stop.id,
+          pngBytes: png,
+          sortOrder: evidence.length,
+        );
+        evidence.add(signatureUpload);
+      }
+
       if (!mounted) return;
       setState(() => _progress = 'Mengirim bukti...');
 
@@ -316,6 +364,9 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
 
   String? _validate() {
     if (_photos.isEmpty) return 'Minimal satu foto bukti wajib dilampirkan.';
+    if (!_isLoading && !_hasSignature) {
+      return 'Tanda tangan penerima wajib diisi.';
+    }
     if (_latitude == null || _longitude == null) {
       return 'Lokasi GPS belum didapat. Ambil lokasi terlebih dahulu.';
     }
@@ -373,7 +424,7 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
         title: const Text('Kirim Ulang Bukti?'),
         content: const Text(
           'Bukti sebelumnya akan digantikan oleh versi baru. '
-          'Foto perlu dilampirkan ulang.',
+          'Foto dan tanda tangan perlu dilampirkan ulang.',
         ),
         actions: [
           TextButton(
@@ -435,6 +486,8 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
                         _buildRecipientField(),
                         const SizedBox(height: AppSpacing.base),
                         _buildNoteField(),
+                        const SizedBox(height: AppSpacing.base),
+                        _buildSignatureSection(),
                       ],
                     ],
                     const SizedBox(height: AppSpacing.xl),
@@ -454,7 +507,11 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
   /// Tidak mengambil GPS; hanya menampilkan data versi aktif.
   Widget _buildReviewSection() {
     final current = widget.stop.current;
-    final photos = widget.existingEvidence;
+    final photos =
+        widget.existingEvidence.where((e) => !e.isSignature).toList();
+    final signature = widget.existingEvidence
+        .where((e) => e.isSignature)
+        .toList();
     final outOfRadius = current?.geofenceOk == false;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -585,6 +642,26 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
                     ),
         ),
         const SizedBox(height: AppSpacing.base),
+        _Section(
+          title: 'Tanda Tangan Penerima',
+          subtitle: signature.isEmpty
+              ? 'Tanda tangan belum tersedia'
+              : '${signature.length} tanda tangan',
+          child: signature.isEmpty
+              ? const Text('Tanda tangan tersimpan tidak dapat dimuat saat ini.')
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  child: Image.network(
+                    signature.first.url,
+                    width: double.infinity,
+                    height: 140,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => const Text(
+                        'Tanda tangan tidak dapat dimuat.'),
+                  ),
+                ),
+        ),
+        const SizedBox(height: AppSpacing.base),
         // ── Detail pengiriman ──
         _Section(
           title: 'Detail Pengiriman',
@@ -690,21 +767,21 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
             border: Border.all(
                 color: AppColors.warning.withValues(alpha: 0.3)),
           ),
-          child: const Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.info_outline_rounded,
-                  size: 15, color: AppColors.warning),
-              SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Kirim ulang mengganti bukti ini. Foto dan lokasi wajib diambil ulang.',
-                  style: TextStyle(
-                      fontSize: 11, color: AppColors.warning),
-                ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      size: 15, color: AppColors.warning),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Kirim ulang mengganti bukti ini. Foto, tanda tangan, dan lokasi wajib diambil ulang.',
+                      style: TextStyle(
+                          fontSize: 11, color: AppColors.warning),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
         ),
       ],
     );
@@ -1201,6 +1278,85 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
     );
   }
 
+  Widget _buildSignatureSection() {
+    return _Section(
+      title: 'Tanda Tangan Penerima',
+      subtitle: 'Wajib untuk semua hasil pengiriman',
+      trailing: TextButton.icon(
+        onPressed: _submitting ? null : _clearSignature,
+        icon: const Icon(Icons.refresh_rounded, size: 16),
+        label: const Text('Hapus/Ulangi'),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 180,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              child: RepaintBoundary(
+                key: _signatureBoundaryKey,
+                child: Container(
+                  color: Colors.white,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onPanStart: _submitting
+                        ? null
+                        : (details) {
+                            final local = _toLocal(details.globalPosition);
+                            if (local == null) return;
+                            setState(() => _signaturePoints.add(local));
+                          },
+                    onPanUpdate: _submitting
+                        ? null
+                        : (details) {
+                            final local = _toLocal(details.globalPosition);
+                            if (local == null) return;
+                            setState(() => _signaturePoints.add(local));
+                          },
+                    onPanEnd: _submitting
+                        ? null
+                        : (_) {
+                            setState(() => _signaturePoints.add(null));
+                          },
+                    child: CustomPaint(
+                      painter: _SignaturePainter(points: _signaturePoints),
+                      size: Size.infinite,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _hasSignature
+                ? 'Tanda tangan terisi.'
+                : 'Minta penerima menandatangani dengan jari/stylus.',
+            style: AppTextStyles.bodySm,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Offset? _toLocal(Offset global) {
+    try {
+      final boundary = _signatureBoundaryKey.currentContext
+          ?.findRenderObject() as RenderBox?;
+      if (boundary == null) return null;
+      return boundary.globalToLocal(global);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Bar bawah: dalam mode lihat bukti hanya menawarkan kirim ulang
   /// (yang sekaligus mengaktifkan GPS); selain itu tombol kirim biasa.
   Widget _buildSubmitBar() {
@@ -1341,8 +1497,10 @@ class _Section extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget child;
+  final Widget? trailing;
 
-  const _Section({required this.title, this.subtitle, required this.child});
+  const _Section(
+      {required this.title, this.subtitle, required this.child, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -1357,17 +1515,58 @@ class _Section extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: AppTextStyles.h4.copyWith(fontSize: 14)),
-          if (subtitle != null) ...[
-            const SizedBox(height: 2),
-            Text(subtitle!, style: AppTextStyles.labelSm),
-          ],
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTextStyles.h4.copyWith(fontSize: 14)),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(subtitle!, style: AppTextStyles.labelSm),
+                    ],
+                  ],
+                ),
+              ),
+              if (trailing != null) ...[
+                const SizedBox(width: 8),
+                trailing!,
+              ],
+            ],
+          ),
           const SizedBox(height: AppSpacing.md),
           child,
         ],
       ),
     );
   }
+}
+
+class _SignaturePainter extends CustomPainter {
+  final List<Offset?> points;
+
+  const _SignaturePainter({required this.points});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF0F172A)
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    for (int i = 0; i < points.length - 1; i++) {
+      final current = points[i];
+      final next = points[i + 1];
+      if (current == null || next == null) continue;
+      canvas.drawLine(current, next, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SignaturePainter oldDelegate) =>
+      oldDelegate.points != points;
 }
 
 /// Foto evidence yang bisa diketuk untuk dibuka fullscreen.

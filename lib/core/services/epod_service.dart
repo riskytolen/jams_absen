@@ -27,8 +27,13 @@ class EpodOverview {
   bool get isHelper => role == 'HELPER';
   bool get isCoordinator => role == 'COORDINATOR';
   bool get isDeputyCoordinator => role == 'DEPUTY_COORDINATOR';
+  bool get isOther => role == 'OTHER';
   bool get isEligible =>
-      isDriver || isHelper || isCoordinator || isDeputyCoordinator;
+      isDriver ||
+      isHelper ||
+      isCoordinator ||
+      isDeputyCoordinator ||
+      isOther;
 
   /// FO selesai tetap tampil di `mine`, jadi "aktif" harus status-aware:
   /// hanya FO yang belum COMPLETED/CANCELLED yang menghalangi klaim baru.
@@ -45,15 +50,17 @@ class EpodException implements Exception {
   String toString() => message;
 }
 
-/// Satu foto bukti yang sudah terunggah ke Storage.
+/// Satu bukti yang sudah terunggah ke Storage (foto atau tanda tangan).
 ///
 /// Bentuk ini adalah kontrak `p_evidence` pada RPC `tms_epod_mobile_submit`.
+/// `evidenceType` memakai nilai `PHOTO` atau `RECIPIENT_SIGNATURE`.
 class EpodEvidenceUpload {
   final String path;
   final String mimeType;
   final int sizeBytes;
   final String? originalFilename;
   final int sortOrder;
+  final String evidenceType;
 
   const EpodEvidenceUpload({
     required this.path,
@@ -61,6 +68,7 @@ class EpodEvidenceUpload {
     required this.sizeBytes,
     required this.originalFilename,
     required this.sortOrder,
+    this.evidenceType = 'PHOTO',
   });
 
   Map<String, dynamic> toJson() => {
@@ -70,6 +78,7 @@ class EpodEvidenceUpload {
         'size_bytes': sizeBytes,
         'original_filename': originalFilename,
         'sort_order': sortOrder,
+        'evidence_type': evidenceType,
       };
 }
 
@@ -115,7 +124,42 @@ abstract final class EpodService {
     }
   }
 
-  /// Ambil role mobile pegawai: 'DRIVER', 'HELPER', atau null.
+  /// Ambil detail rute FO sebelum claim (read-only, tanpa submission).
+  static Future<EpodDetail> getPreview({
+    required String assignmentId,
+    required String employeeId,
+  }) async {
+    try {
+      await SupabaseService.ensureAuthenticated();
+      final data = await SupabaseService.client.rpc(
+        'tms_epod_mobile_preview',
+        params: {
+          'p_assignment_id': assignmentId,
+          'p_employee_id': employeeId,
+        },
+      );
+      final map = _asMap(data);
+      final assignment = _asMap(map['assignment']);
+      // Preview mengembalikan `role` top-level; samakan ke `my_role` agar
+      // EpodDetail tetap bisa menampilkan label peran.
+      if (assignment['my_role'] == null && map['role'] != null) {
+        assignment['my_role'] = map['role'];
+      }
+      return EpodDetail.fromMap({
+        'assignment': assignment,
+        'stops': map['stops'],
+      });
+    } on PostgrestException catch (e) {
+      throw EpodException(_friendlyMessage(e.message));
+    } catch (e) {
+      debugPrint('[EpodService] getPreview error: $e');
+      throw const EpodException(
+        'Gagal memuat rute FO. Periksa koneksi lalu coba lagi.',
+      );
+    }
+  }
+
+  /// Ambil role mobile pegawai: DRIVER/HELPER/COORDINATOR/DEPUTY_COORDINATOR/OTHER, atau null.
   static Future<String?> getRole(String employeeId) async {
     try {
       await SupabaseService.ensureAuthenticated();
@@ -315,6 +359,50 @@ abstract final class EpodService {
     }
   }
 
+  /// Unggah tanda tangan penerima (PNG) tanpa kompresi foto.
+  static Future<EpodEvidenceUpload> uploadSignature({
+    required String assignmentId,
+    required String stopId,
+    required Uint8List pngBytes,
+    required int sortOrder,
+  }) async {
+    try {
+      await SupabaseService.forceEnsureAuthenticated();
+      if (pngBytes.isEmpty) {
+        throw const EpodException('Tanda tangan penerima wajib diisi.');
+      }
+      final objectPath =
+          'assignments/$assignmentId/stops/$stopId/${_objectName()}.png';
+      await SupabaseService.client.storage.from(bucket).uploadBinary(
+            objectPath,
+            pngBytes,
+            fileOptions: const FileOptions(
+              upsert: false,
+              contentType: 'image/png',
+            ),
+          );
+      return EpodEvidenceUpload(
+        path: objectPath,
+        mimeType: 'image/png',
+        sizeBytes: pngBytes.length,
+        originalFilename: 'tanda-tangan-penerima.png',
+        sortOrder: sortOrder,
+        evidenceType: 'RECIPIENT_SIGNATURE',
+      );
+    } on PostgrestException catch (e) {
+      throw EpodException(_friendlyMessage(e.message));
+    } on StorageException catch (e) {
+      debugPrint('[EpodService] uploadSignature storage error: $e');
+      throw const EpodException('Gagal mengunggah tanda tangan. Coba lagi.');
+    } catch (e) {
+      debugPrint('[EpodService] uploadSignature error: $e');
+      if (e is EpodException) rethrow;
+      throw const EpodException(
+        'Gagal mengunggah tanda tangan. Periksa koneksi lalu coba lagi.',
+      );
+    }
+  }
+
   /// Jarak Haversine (meter) antara dua koordinat.
   static double haversineMeters(
     double lat1,
@@ -387,7 +475,13 @@ abstract final class EpodService {
 
   static String? _asRole(dynamic value) {
     final role = value?.toString();
-    if (role == 'DRIVER' || role == 'HELPER') return role;
+    if (role == 'DRIVER' ||
+        role == 'HELPER' ||
+        role == 'COORDINATOR' ||
+        role == 'DEPUTY_COORDINATOR' ||
+        role == 'OTHER') {
+      return role;
+    }
     return null;
   }
 
