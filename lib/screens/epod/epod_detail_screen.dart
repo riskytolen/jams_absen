@@ -187,6 +187,11 @@ class _EpodDetailScreenState extends State<EpodDetailScreen> {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
+                          if (detail.clientLabel != null)
+                            _HeaderChip(
+                              icon: Icons.business_rounded,
+                              label: detail.clientLabel!,
+                            ),
                           _HeaderChip(
                             icon: Icons.local_shipping_rounded,
                             label: detail.licensePlate ?? '-',

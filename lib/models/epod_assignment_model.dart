@@ -13,6 +13,10 @@ class EpodAssignment {
   final int deliveryTotalCount;
   final DateTime? snapshotAt;
   final String? myRole;
+  final String? clientId;
+  final String? clientCode;
+  final String? clientSlug;
+  final String? clientName;
 
   const EpodAssignment({
     required this.id,
@@ -25,6 +29,10 @@ class EpodAssignment {
     required this.deliveryTotalCount,
     required this.snapshotAt,
     required this.myRole,
+    this.clientId,
+    this.clientCode,
+    this.clientSlug,
+    this.clientName,
   });
 
   factory EpodAssignment.fromMap(Map<String, dynamic> map) {
@@ -39,6 +47,10 @@ class EpodAssignment {
       deliveryTotalCount: _int(map['delivery_total_count']),
       snapshotAt: _date(map['snapshot_at']),
       myRole: _str(map['my_role']),
+      clientId: _str(map['client_id']),
+      clientCode: _str(map['client_code']),
+      clientSlug: _str(map['client_slug']),
+      clientName: _str(map['client_name']),
     );
   }
 
@@ -102,6 +114,9 @@ class EpodAssignment {
 
   /// Judul utama kartu: nomor FO bila ada, jika tidak potongan ID.
   String get title => taskNumber ?? (id.length > 8 ? id.substring(0, 8) : id);
+
+  /// Label client untuk badge kartu (nama client bila ada).
+  String? get clientLabel => clientName ?? clientCode;
 
   /// Ringkasan progres pengantaran.
   String get deliveryProgress => '$deliveryDoneCount/$deliveryTotalCount titik';

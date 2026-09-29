@@ -33,6 +33,7 @@ class _EpodHomeScreenState extends State<EpodHomeScreen> {
   EpodOverview _overview = EpodOverview.empty;
   String? _claimingId;
   int _tabIndex = 0;
+  String? _clientFilter;
 
   @override
   void initState() {
@@ -374,7 +375,61 @@ class _EpodHomeScreenState extends State<EpodHomeScreen> {
     );
   }
 
+  /// Opsi filter client dari FO yang dimuat (dinamis mengikuti data).
+  List<({String code, String label})> get _clientOptions {
+    final seen = <String, String>{};
+    for (final assignment in [..._overview.mine, ..._overview.available]) {
+      final code = assignment.clientCode;
+      if (code == null || code.isEmpty || seen.containsKey(code)) continue;
+      seen[code] = assignment.clientLabel ?? code;
+    }
+    return [for (final entry in seen.entries) (code: entry.key, label: entry.value)];
+  }
+
+  List<EpodAssignment> get _visibleMine {
+    final filter = _clientFilter;
+    if (filter == null) return _overview.mine;
+    return _overview.mine.where((a) => a.clientCode == filter).toList();
+  }
+
+  List<EpodAssignment> get _visibleAvailable {
+    final filter = _clientFilter;
+    if (filter == null) return _overview.available;
+    return _overview.available.where((a) => a.clientCode == filter).toList();
+  }
+
+  Widget _buildClientFilter() {
+    final options = _clientOptions;
+    if (options.length < 2) return const SizedBox.shrink();
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.base, AppSpacing.sm, AppSpacing.base, 0),
+      child: Row(
+        children: [
+          ChoiceChip(
+            label: const Text('Semua'),
+            selected: _clientFilter == null,
+            onSelected: (_) => setState(() => _clientFilter = null),
+          ),
+          const SizedBox(width: 8),
+          for (final option in options)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(option.label),
+                selected: _clientFilter == option.code,
+                onSelected: (_) =>
+                    setState(() => _clientFilter = option.code),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMineList() {
+    final assignments = _visibleMine;
     if (_overview.mine.isEmpty) {
       return _buildScrollableMessage(
         icon: Icons.inbox_rounded,
@@ -382,18 +437,32 @@ class _EpodHomeScreenState extends State<EpodHomeScreen> {
         message: 'Anda belum mengklaim FO. Buka tab Claim FO untuk mengambil FO.',
       );
     }
-    return ListView.separated(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(AppSpacing.base),
-      itemCount: _overview.mine.length,
-      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-      itemBuilder: (_, index) {
-        final assignment = _overview.mine[index];
-        return _MineCard(
-          assignment: assignment,
-          onTap: () => _openDetail(assignment),
-        );
-      },
+    if (assignments.isEmpty) {
+      return _buildScrollableMessage(
+        icon: Icons.filter_list_rounded,
+        title: 'Tidak ada FO client ini',
+        message: 'Ubah filter client untuk melihat FO lainnya.',
+      );
+    }
+    return Column(
+      children: [
+        _buildClientFilter(),
+        Expanded(
+          child: ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(AppSpacing.base),
+            itemCount: assignments.length,
+            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+            itemBuilder: (_, index) {
+              final assignment = assignments[index];
+              return _MineCard(
+                assignment: assignment,
+                onTap: () => _openDetail(assignment),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -447,21 +516,36 @@ class _EpodHomeScreenState extends State<EpodHomeScreen> {
         message: 'Belum ada FO yang bisa diklaim saat ini. Tarik untuk memuat ulang.',
       );
     }
-    return ListView.separated(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(AppSpacing.base),
-      itemCount: _overview.available.length,
-      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-      itemBuilder: (_, index) {
-        final assignment = _overview.available[index];
-        return _AvailableCard(
-          assignment: assignment,
-          claiming: _claimingId == assignment.id,
-          disabled: _claimingId != null,
-          onClaim: () => _claim(assignment),
-          onInspect: () => _openPreview(assignment),
-        );
-      },
+    final assignments = _visibleAvailable;
+    if (assignments.isEmpty) {
+      return _buildScrollableMessage(
+        icon: Icons.filter_list_rounded,
+        title: 'Tidak ada FO client ini',
+        message: 'Ubah filter client untuk melihat FO lainnya.',
+      );
+    }
+    return Column(
+      children: [
+        _buildClientFilter(),
+        Expanded(
+          child: ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(AppSpacing.base),
+            itemCount: assignments.length,
+            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+            itemBuilder: (_, index) {
+              final assignment = assignments[index];
+              return _AvailableCard(
+                assignment: assignment,
+                claiming: _claimingId == assignment.id,
+                disabled: _claimingId != null,
+                onClaim: () => _claim(assignment),
+                onInspect: () => _openPreview(assignment),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -576,6 +660,10 @@ class _MineCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (assignment.clientLabel != null) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    _ClientBadge(label: assignment.clientLabel!),
+                  ],
                   const SizedBox(width: AppSpacing.sm),
                   _Pill(label: assignment.statusLabel, color: tone),
                 ],
@@ -697,6 +785,10 @@ class _AvailableCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (assignment.clientLabel != null) ...[
+                    const SizedBox(width: 8),
+                    _ClientBadge(label: assignment.clientLabel!),
+                  ],
                   const SizedBox(width: 8),
                   const Icon(Icons.visibility_outlined, size: 18, color: AppColors.textMuted),
                 ],
@@ -1039,6 +1131,32 @@ class _Pill extends StatelessWidget {
           fontSize: 11,
           fontWeight: FontWeight.w700,
           color: color,
+        ),
+      ),
+    );
+  }
+}
+
+/// Badge client (Tuku/Manginue) pada kartu FO.
+class _ClientBadge extends StatelessWidget {
+  final String label;
+
+  const _ClientBadge({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: AppColors.accent,
         ),
       ),
     );

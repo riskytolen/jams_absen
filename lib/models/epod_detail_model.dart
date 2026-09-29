@@ -191,6 +191,10 @@ class EpodDetail {
   final int deliveryDoneCount;
   final int deliveryTotalCount;
   final String? myRole;
+  final String? clientId;
+  final String? clientCode;
+  final String? clientSlug;
+  final String? clientName;
   final List<EpodStop> stops;
 
   const EpodDetail({
@@ -203,6 +207,10 @@ class EpodDetail {
     required this.deliveryDoneCount,
     required this.deliveryTotalCount,
     required this.myRole,
+    this.clientId,
+    this.clientCode,
+    this.clientSlug,
+    this.clientName,
     required this.stops,
   });
 
@@ -220,6 +228,10 @@ class EpodDetail {
       deliveryDoneCount: _int(assignment['delivery_done_count']),
       deliveryTotalCount: _int(assignment['delivery_total_count']),
       myRole: _str(assignment['my_role']),
+      clientId: _str(assignment['client_id']),
+      clientCode: _str(assignment['client_code']),
+      clientSlug: _str(assignment['client_slug']),
+      clientName: _str(assignment['client_name']),
       stops: _list(map['stops']).map(EpodStop.fromMap).toList(),
     );
   }
@@ -227,6 +239,9 @@ class EpodDetail {
   bool get loadingCompleted => loadingStatus == 'LOADING_COMPLETED';
 
   String get title => taskNumber ?? (id.length > 8 ? id.substring(0, 8) : id);
+
+  /// Label client untuk badge (nama client bila ada).
+  String? get clientLabel => clientName ?? clientCode;
 
   String get roleLabel {
     switch (myRole) {
