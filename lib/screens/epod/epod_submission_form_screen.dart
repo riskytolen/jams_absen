@@ -51,7 +51,10 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
   final TextEditingController _reasonCtrl = TextEditingController();
   final List<_ItemRow> _items = [];
   final GlobalKey _signatureBoundaryKey = GlobalKey();
-  final List<Offset?> _signaturePoints = [];
+  // List diganti dengan instance baru setiap ada perubahan agar
+  // _SignaturePainter.shouldRepaint mendeteksi perubahan referensi
+  // dan canvas digambar ulang (termasuk saat Hapus/Ulangi).
+  List<Offset?> _signaturePoints = [];
 
   String? _result;
   double? _latitude;
@@ -85,7 +88,7 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
   void _enterEdit() {
     setState(() {
       _reviewing = false;
-      _signaturePoints.clear();
+      _signaturePoints = [];
     });
     _fetchLocation();
   }
@@ -93,7 +96,7 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
   bool get _hasSignature => _signaturePoints.any((p) => p != null);
 
   void _clearSignature() {
-    setState(() => _signaturePoints.clear());
+    setState(() => _signaturePoints = []);
   }
 
   Future<Uint8List?> _exportSignature() async {
@@ -1311,19 +1314,19 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
                         : (details) {
                             final local = _toLocal(details.globalPosition);
                             if (local == null) return;
-                            setState(() => _signaturePoints.add(local));
+                            setState(() => _signaturePoints = [..._signaturePoints, local]);
                           },
                     onPanUpdate: _submitting
                         ? null
                         : (details) {
                             final local = _toLocal(details.globalPosition);
                             if (local == null) return;
-                            setState(() => _signaturePoints.add(local));
+                            setState(() => _signaturePoints = [..._signaturePoints, local]);
                           },
                     onPanEnd: _submitting
                         ? null
                         : (_) {
-                            setState(() => _signaturePoints.add(null));
+                            setState(() => _signaturePoints = [..._signaturePoints, null]);
                           },
                     child: CustomPaint(
                       painter: _SignaturePainter(points: _signaturePoints),
