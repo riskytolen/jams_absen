@@ -281,7 +281,6 @@ abstract final class EpodService {
     required DateTime capturedAtDevice,
     required String outOfRadiusReason,
     required List<EpodEvidenceUpload> evidence,
-    required List<EpodItemInput> items,
   }) async {
     try {
       await SupabaseService.forceEnsureAuthenticated();
@@ -299,7 +298,6 @@ abstract final class EpodService {
           'p_captured_at_device': capturedAtDevice.toUtc().toIso8601String(),
           'p_out_of_radius_reason': outOfRadiusReason,
           'p_evidence': evidence.map((item) => item.toJson()).toList(),
-          'p_items': items.map((item) => item.toJson()).toList(),
         },
       );
       return EpodSubmission.fromMap(_asMap(data));

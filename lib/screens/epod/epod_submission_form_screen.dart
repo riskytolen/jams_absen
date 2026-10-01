@@ -14,6 +14,8 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../models/epod_detail_model.dart';
 import '../../widgets/common/app_notification.dart';
+import '../../widgets/common/signature_gesture_recognizer.dart';
+import '../../widgets/common/signature_pad.dart';
 import 'epod_evidence_viewer.dart';
 
 /// Form input bukti e-POD untuk satu titik (loading atau pengantaran).
@@ -49,12 +51,12 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
   final TextEditingController _recipientCtrl = TextEditingController();
   final TextEditingController _noteCtrl = TextEditingController();
   final TextEditingController _reasonCtrl = TextEditingController();
-  final List<_ItemRow> _items = [];
   final GlobalKey _signatureBoundaryKey = GlobalKey();
-  // List diganti dengan instance baru setiap ada perubahan agar
-  // _SignaturePainter.shouldRepaint mendeteksi perubahan referensi
-  // dan canvas digambar ulang (termasuk saat Hapus/Ulangi).
-  List<Offset?> _signaturePoints = [];
+  // Controller menggambar ulang kanvas sendiri via repaint listenable,
+  // jadi gerakan jari tidak me-rebuild seluruh form. Form hanya bereaksi
+  // saat status terisi/kosong berubah (lihat _onSignatureChanged).
+  final SignaturePadController _signatureController = SignaturePadController();
+  bool _signaturePresent = false;
 
   String? _result;
   double? _latitude;
@@ -78,25 +80,35 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
   @override
   void initState() {
     super.initState();
-    if (!_isLoading) _items.add(_ItemRow());
     _prefillFromExisting();
     _reviewing = _isCorrection;
+    _signatureController.addListener(_onSignatureChanged);
     if (!_reviewing) _fetchLocation();
   }
 
   /// Masuk ke mode isi/kirim ulang: tampilkan form lalu ambil lokasi.
   void _enterEdit() {
+    _signatureController.clear();
     setState(() {
       _reviewing = false;
-      _signaturePoints = [];
     });
     _fetchLocation();
   }
 
-  bool get _hasSignature => _signaturePoints.any((p) => p != null);
+  bool get _hasSignature => _signatureController.hasSignature;
 
   void _clearSignature() {
-    setState(() => _signaturePoints = []);
+    // Listener _onSignatureChanged yang memicu rebuild bila perlu.
+    _signatureController.clear();
+  }
+
+  /// Rebuild form hanya saat status tanda tangan berubah antara terisi dan
+  /// kosong (teks petunjuk/validasi). Gerakan jari per-frame tidak lewat sini.
+  void _onSignatureChanged() {
+    final present = _signatureController.hasSignature;
+    if (present == _signaturePresent) return;
+    _signaturePresent = present;
+    if (mounted) setState(() {});
   }
 
   Future<Uint8List?> _exportSignature() async {
@@ -121,21 +133,15 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
     _noteCtrl.text = current.note ?? '';
     _reasonCtrl.text = current.outOfRadiusReason ?? '';
     _result = current.result;
-    if (!_isLoading && current.items.isNotEmpty) {
-      _items
-        ..clear()
-        ..addAll(current.items.map((item) => _ItemRow.fromItem(item)));
-    }
   }
 
   @override
   void dispose() {
+    _signatureController.removeListener(_onSignatureChanged);
+    _signatureController.dispose();
     _recipientCtrl.dispose();
     _noteCtrl.dispose();
     _reasonCtrl.dispose();
-    for (final item in _items) {
-      item.dispose();
-    }
     super.dispose();
   }
 
@@ -259,19 +265,6 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
     );
   }
 
-  // ── Barang ───────────────────────────────────────────────
-
-  void _addItem() {
-    setState(() => _items.add(_ItemRow()));
-  }
-
-  void _removeItem(int index) {
-    setState(() {
-      _items[index].dispose();
-      _items.removeAt(index);
-    });
-  }
-
   // ── Submit ───────────────────────────────────────────────
 
   Future<void> _submit() async {
@@ -340,7 +333,6 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
         capturedAtDevice: DateTime.now(),
         outOfRadiusReason: _outOfRadius ? _reasonCtrl.text.trim() : '',
         evidence: evidence,
-        items: _isLoading ? const [] : _collectItems(),
       );
 
       if (!mounted) return;
@@ -380,14 +372,6 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
     if (_isLoading) return null;
 
     if (_result == null) return 'Hasil pengiriman wajib dipilih.';
-    final items = _collectItems();
-    if (items.isEmpty) return 'Minimal satu barang wajib diisi.';
-    for (final item in items) {
-      if (item.name.isEmpty) return 'Nama barang wajib diisi.';
-      if (item.quantity <= 0) {
-        return 'Kuantitas barang "${item.name}" harus lebih dari 0.';
-      }
-    }
     if (_result != 'REJECTED' && _recipientCtrl.text.trim().isEmpty) {
       return 'Nama penerima wajib diisi.';
     }
@@ -397,23 +381,6 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
           : 'Alasan wajib diisi untuk pengiriman yang ditolak.';
     }
     return null;
-  }
-
-  List<EpodItemInput> _collectItems() {
-    final result = <EpodItemInput>[];
-    for (final row in _items) {
-      final name = row.nameCtrl.text.trim();
-      final qtyText = row.qtyCtrl.text.trim().replaceAll(',', '.');
-      final unit = row.unitCtrl.text.trim();
-      final isEmpty = name.isEmpty && qtyText.isEmpty && unit.isEmpty;
-      if (isEmpty) continue;
-      result.add(EpodItemInput(
-        name: name,
-        quantity: double.tryParse(qtyText) ?? 0,
-        unit: unit.isEmpty ? null : unit,
-      ));
-    }
-    return result;
   }
 
   Future<bool?> _confirmCorrection() {
@@ -481,8 +448,6 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
                         _buildOutOfRadiusField(),
                       ],
                       if (!_isLoading) ...[
-                        const SizedBox(height: AppSpacing.base),
-                        _buildItemsSection(),
                         const SizedBox(height: AppSpacing.base),
                         _buildResultSection(),
                         const SizedBox(height: AppSpacing.base),
@@ -1117,116 +1082,6 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
     );
   }
 
-  Widget _buildItemsSection() {
-    return _Section(
-      title: 'Barang',
-      subtitle: 'Minimal 1 barang, maksimal 20',
-      child: Column(
-        children: [
-          for (int i = 0; i < _items.length; i++) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'Barang ${i + 1}',
-                        style: AppTextStyles.label.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const Spacer(),
-                      if (_items.length > 1)
-                        IconButton(
-                          onPressed:
-                              _submitting ? null : () => _removeItem(i),
-                          icon: const Icon(Icons.delete_outline_rounded,
-                              size: 18),
-                          color: AppColors.error,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                              minWidth: 32, minHeight: 32),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  TextField(
-                    controller: _items[i].nameCtrl,
-                    enabled: !_submitting,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(
-                      labelText: 'Nama barang',
-                      hintText: 'Contoh: Kopi Tubruk',
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _items[i].qtyCtrl,
-                          enabled: !_submitting,
-                          keyboardType:
-                              const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          decoration: const InputDecoration(
-                            labelText: 'Jumlah',
-                            hintText: 'Contoh: 2',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: TextField(
-                          controller: _items[i].unitCtrl,
-                          enabled: !_submitting,
-                          textCapitalization: TextCapitalization.words,
-                          decoration: const InputDecoration(
-                            labelText: 'Satuan',
-                            hintText: 'Contoh: dus',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (i != _items.length - 1)
-              const SizedBox(height: AppSpacing.sm),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed:
-                  _submitting || _items.length >= 20 ? null : _addItem,
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: Text('Tambah Barang (${_items.length}/20)'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.accent,
-                side: const BorderSide(color: AppColors.accent),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildResultSection() {
     return _Section(
       title: 'Hasil Pengiriman',
@@ -1307,29 +1162,46 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
                 key: _signatureBoundaryKey,
                 child: Container(
                   color: Colors.white,
-                  child: GestureDetector(
+                  // RawGestureDetector + SignatureGestureRecognizer (eager):
+                  // sentuhan yang dimulai di kanvas langsung dimenangkan
+                  // kanvas sehingga ListView induk tidak mencurinya menjadi
+                  // scroll. GestureDetector.onPan* biasa kalah pada gerakan
+                  // dominan vertikal — itulah penyebab "kadang scroll".
+                  child: RawGestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onPanStart: _submitting
-                        ? null
-                        : (details) {
-                            final local = _toLocal(details.globalPosition);
-                            if (local == null) return;
-                            setState(() => _signaturePoints = [..._signaturePoints, local]);
-                          },
-                    onPanUpdate: _submitting
-                        ? null
-                        : (details) {
-                            final local = _toLocal(details.globalPosition);
-                            if (local == null) return;
-                            setState(() => _signaturePoints = [..._signaturePoints, local]);
-                          },
-                    onPanEnd: _submitting
-                        ? null
-                        : (_) {
-                            setState(() => _signaturePoints = [..._signaturePoints, null]);
-                          },
+                    gestures: <Type, GestureRecognizerFactory>{
+                      SignatureGestureRecognizer:
+                          GestureRecognizerFactoryWithHandlers<
+                              SignatureGestureRecognizer>(
+                        () => SignatureGestureRecognizer(),
+                        (instance) {
+                          instance
+                            // Tanpa setState: controller memberi tahu
+                            // SignaturePainter lewat repaint listenable,
+                            // sehingga hanya kanvas yang digambar ulang.
+                            ..onDrawStart = (global) {
+                              if (_submitting) return;
+                              final local = _toLocal(global);
+                              if (local == null) return;
+                              _signatureController.startStroke(local);
+                            }
+                            ..onDrawUpdate = (global) {
+                              if (_submitting) return;
+                              final local = _toLocal(global);
+                              if (local == null) return;
+                              _signatureController.appendPoint(local);
+                            }
+                            ..onDrawEnd = () {
+                              if (_submitting) return;
+                              _signatureController.endStroke();
+                            };
+                        },
+                      ),
+                    },
                     child: CustomPaint(
-                      painter: _SignaturePainter(points: _signaturePoints),
+                      painter: SignaturePainter(
+                        controller: _signatureController,
+                      ),
                       size: Size.infinite,
                     ),
                   ),
@@ -1353,8 +1225,15 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
     try {
       final boundary = _signatureBoundaryKey.currentContext
           ?.findRenderObject() as RenderBox?;
-      if (boundary == null) return null;
-      return boundary.globalToLocal(global);
+      if (boundary == null || !boundary.hasSize) return null;
+      final local = boundary.globalToLocal(global);
+      // Jepit ke dalam kanvas: jari yang meluncur keluar batas tidak
+      // menghasilkan garis liar dan hasil ekspor PNG tetap rapi.
+      final size = boundary.size;
+      return Offset(
+        local.dx.clamp(0.0, size.width),
+        local.dy.clamp(0.0, size.height),
+      );
     } catch (_) {
       return null;
     }
@@ -1470,32 +1349,6 @@ class _EpodSubmissionFormScreenState extends State<EpodSubmissionFormScreen> {
 // ═════════════════════════════════════════════════════════
 // WIDGET PENDUKUNG
 // ═════════════════════════════════════════════════════════
-class _ItemRow {
-  final TextEditingController nameCtrl;
-  final TextEditingController qtyCtrl;
-  final TextEditingController unitCtrl;
-
-  _ItemRow()
-      : nameCtrl = TextEditingController(),
-        qtyCtrl = TextEditingController(),
-        unitCtrl = TextEditingController();
-
-  _ItemRow.fromItem(EpodItem item)
-      : nameCtrl = TextEditingController(text: item.name),
-        qtyCtrl = TextEditingController(
-          text: item.quantity == item.quantity.roundToDouble()
-              ? item.quantity.toStringAsFixed(0)
-              : item.quantity.toString(),
-        ),
-        unitCtrl = TextEditingController(text: item.unit ?? '');
-
-  void dispose() {
-    nameCtrl.dispose();
-    qtyCtrl.dispose();
-    unitCtrl.dispose();
-  }
-}
-
 class _Section extends StatelessWidget {
   final String title;
   final String? subtitle;
@@ -1545,31 +1398,6 @@ class _Section extends StatelessWidget {
       ),
     );
   }
-}
-
-class _SignaturePainter extends CustomPainter {
-  final List<Offset?> points;
-
-  const _SignaturePainter({required this.points});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF0F172A)
-      ..strokeWidth = 2.4
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    for (int i = 0; i < points.length - 1; i++) {
-      final current = points[i];
-      final next = points[i + 1];
-      if (current == null || next == null) continue;
-      canvas.drawLine(current, next, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SignaturePainter oldDelegate) =>
-      oldDelegate.points != points;
 }
 
 /// Foto evidence yang bisa diketuk untuk dibuka fullscreen.

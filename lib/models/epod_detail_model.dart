@@ -273,25 +273,6 @@ class EpodDetail {
       stops.where((s) => !s.isLoading && !s.isDone).length;
 }
 
-/// Input barang dari form (kuantitas masih berupa angka hasil parse).
-class EpodItemInput {
-  final String name;
-  final double quantity;
-  final String? unit;
-
-  const EpodItemInput({
-    required this.name,
-    required this.quantity,
-    required this.unit,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        'quantity': quantity,
-        if (unit != null && unit!.isNotEmpty) 'unit': unit,
-      };
-}
-
 // ── Parsing helpers ───────────────────────────────────────
 
 String? _str(dynamic value) {
